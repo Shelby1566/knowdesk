@@ -6,21 +6,16 @@ jobs:
     steps:
       - name: Checkout KnowDesk
         uses: actions/checkout@v4
-        with:
-          path: knowdesk
 
-      - name: Checkout pinned tau2-bench (033bf08)
-        uses: actions/checkout@v4
-        with:
-          repository: sierra-research/tau2-bench
-          ref: 033bf08
-          path: tau2-bench
+      - name: Clone tau2-bench at commit 033bf08
+        run: |
+          git clone https://github.com/sierra-research/tau2-bench.git ../tau2-bench
+          git -C ../tau2-bench checkout 033bf08
 
       - name: Set up uv
         uses: astral-sh/setup-uv@v4
 
-      - name: Install dependencies (CPU fast mode) and run all 24 tests
-        working-directory: knowdesk
+      - name: Install dependencies and run all 24 unit tests
         run: |
           uv venv --python 3.12
           uv pip install --extra-index-url https://download.pytorch.org/whl/cpu torch
