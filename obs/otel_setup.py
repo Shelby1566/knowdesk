@@ -1,7 +1,30 @@
+import re
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any
+
+_RE_CARD = re.compile(r"\b(?:\d{4}[ -]?){3}(\d{4})\b")
+_RE_SSN = re.compile(r"\b\d{3}-\d{2}-(\d{4})\b")
+_RE_PHONE = re.compile(r"\b(\d{3})[-.]?\d{3}[-.]?(\d{4})\b")
+_RE_EMAIL = re.compile(r"\b([a-zA-Z0-9_.+-])[a-zA-Z0-9_.+-]*@([a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+)\b")
+
+def redact_pii(text: str) -> str:
+    """金融级 PII 审计脱敏：屏蔽 16 位卡号、SSN、手机号与邮箱"""
+    s = _RE_CARD.sub(r"****-****-****-\1", str(text))
+    s = _RE_SSN.sub(r"***-**-\1", s)
+    s = _RE_PHONE.sub(r"\1-***-\2", s)
+    s = _RE_EMAIL.sub(r"\1***@\2", s)
+    return s
+
+def redact_attributes(attrs: dict[str, Any]) -> dict[str, Any]:
+    cleaned: dict[str, Any] = {}
+    for k, v in attrs.items():
+        if isinstance(v, str):
+            cleaned[k] = redact_pii(v)
+        else:
+            cleaned[k] = v
+    return cleaned
 
 @dataclass
 class GenAISpan:
@@ -15,18 +38,20 @@ class GenAISpan:
         return max(0.0, self.end_time_ms - self.start_time_ms)
 
 class GenAITracer:
-    """M17: 遵循 OpenTelemetry GenAI Semantic Conventions (gen_ai.*) 的轻量 Span 收集器"""
+    """M17: 遵循 OpenTelemetry GenAI Semantic Conventions 并内置金融级 PII 脱敏的 Span 收集器"""
     def __init__(self, record_raw_user_text: bool = False):
         self.record_raw_user_text = record_raw_user_text
         self.spans: list[GenAISpan] = []
 
     @contextmanager
     def start_span(self, name: str, **attrs: Any):
-        span = GenAISpan(name=name, start_time_ms=time.perf_counter() * 1000.0, attributes=dict(attrs))
+        safe_attrs = redact_attributes(attrs)
+        span = GenAISpan(name=name, start_time_ms=time.perf_counter() * 1000.0, attributes=safe_attrs)
         try:
             yield span
         finally:
             span.end_time_ms = time.perf_counter() * 1000.0
+            span.attributes = redact_attributes(span.attributes)
             self.spans.append(span)
 
     def record_llm_call(

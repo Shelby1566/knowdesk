@@ -2,6 +2,27 @@
 
 KnowDesk is a tool-augmented customer support agent harness evaluated on **Sierra τ-bench (`banking_knowledge` / τ-Knowledge, commit `033bf08`)** and **`retail (--language zh)`**.
 
+## System Architecture Topology
+
+```mermaid
+flowchart TD
+    User([Customer / FastAPI SSE Stream]) --> Router[M8 Multi-Label Product Line Router]
+    Router --> AgentNode[LangGraph agent_node / PlainAgentLoop]
+    AgentNode -->|Watermark Context Compaction M13| LLM[[DeepSeek-V4.1-Flash / Qwen3.8-Flash]]
+    AgentNode -->|KB_search| Retriever[(KnowDesk Hybrid Retriever<br/>H2 Breadcrumb + BM25 Inverted Index + Qwen3-Emb + RRF)]
+    Retriever -->|M14 Bounded Re-Retrieval & M15 Sub-Agent Isolation| AgentNode
+    AgentNode -->|Parallel Tool Calls Queue| Guard{M12 YAML Guard Engine<br/>NFKD/Base64 Defense-in-Depth}
+    Guard -- Blocked R01-R04 --> SelfCorrect[Structured Error Feedback -> In-Turn Self-Correction]
+    SelfCorrect --> AgentNode
+    Guard -- High-Risk Write --> Confirm[M10 Isolated human_confirm Node<br/>Zero-Side-Effect interrupt]
+    Confirm -- Approve / Modify Args --> Exec[M11 ReliableToolExecutor<br/>SHA-256 Idempotency + Full-Jitter Retry]
+    Confirm -- Reject --> SelfCorrect
+    Guard -- Read-Only / Allowed --> Exec
+    Exec -->|Service Mode| MCP[M27/M36 MCP v2 Client -> MCPServer]
+    Exec -->|Benchmark Mode| TauEnv[Sierra tau2-bench Environment Replay]
+    Exec --> OTel[M17 OpenTelemetry GenAI Spans + PII Redaction]
+```
+
 ## Key Architecture & Features
 - **Hybrid Retrieval Pipeline (`kb/`)**: H2 section chunking with document-title breadcrumbs (`Title > H2`), custom BM25 with negative-IDF smoothing, dense retrieval (`Qwen/Qwen3-Embedding-0.6B` & `BAAI/bge-m3` with `FAISS IndexFlatIP`), Reciprocal Rank Fusion (RRF), multi-label product-line intent soft boosting, and FP16 local cross-encoder reranking.
 - **Dual Agent Implementations (`plain/` & `agent/`)**: Side-by-side comparison between a framework-free loop (`PlainAgentLoop`) and a `LangGraph StateGraph` implementation sharing identical tool execution and safety guardrails.
@@ -125,3 +146,22 @@ uv run --no-sync uvicorn service.app:app --host 0.0.0.0 --port 8000
 |---|---:|---:|
 | 1. τ原生基线 (`llm_agent`) | 0.7000 | 34.3 |
 | 2. KnowDesk-LangGraph (`knowdesk_graph` + Guard) | 0.5000 | 28.1 |
+
+
+---
+
+# X5 上下文水位线压缩与 X7 检索子 Agent 隔离实测消融报告 (n=10 条真实长程工单轨迹)
+
+## 1. M13 水位线分段上下文压缩 (Watermark Context Compaction, 实验 X5)
+
+| 上下文策略 | 多轮累计估算输入 Tokens | 单单平均输入 Tokens | 相对 Token 节省率 | `tool_call_id` 协议成对完整率 | DB 终态通过率 (Pass^1) |
+|---|---:|---:|---:|---:|---:|
+| 1. 不压缩基线 (Full History) | 1,879,409 | 187,940 | 0.0% | 100.0% | 0.4000 |
+| 2. M13 水位线分段压缩 (保留最近6条 + 早期KB头部摘要) | 716,677 | 71,667 | **-61.87%** | **100.0%** | **0.4000 (无退化)** |
+
+## 2. M15 检索子 Agent 上下文隔离与 Small-to-Big 父子块对比 (实验 X7)
+
+| 检索返回粒度策略 | 单次检索平均注入字符数 | 相对全文注入节省比例 | 条款原文 100% 子串保真率 |
+|---|---:|---:|---:|
+| 1. 单 Agent 直接注入 Top-10 完整政策文档 | 11,705 chars | 0.0% | 100.0% |
+| 2. M15 检索子 Agent 隔离 (`chunk_id` 引用提取 Top-5 关键H2节) | 1,892 chars | **-83.8%** | **100.0% (零篡改)** |

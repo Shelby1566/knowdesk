@@ -1,4 +1,4 @@
-{"agent": "plain", "event": "guard_blocked", "attempt": 0, "outer_tool": "call_discoverable_agent_tool", "real_tool": "freeze_card", "rule_id": "R03_REQUIRE_UNLOCK_BEFORE_DISCOVERABLE_CALL", "reason": "Discoverable tool 'freeze_card' must be unlocked first."}
+{"agent": "plain", "event": "guard_blocked", "attempt": 0, "outer_tool": "call_discoverable_agent_tool", "real_tool": "freeze_card", "rule_id": "R04_HIGH_RISK_WRITE_VERIFICATION_AND_APPROVAL", "reason": "High-risk operation 'freeze_card' requires prior verification."}
 {"agent": "plain", "event": "self_corrected", "attempt": 1, "new_tools": ["unlock_discoverable_agent_tool"]}
-{"agent": "langgraph", "event": "guard_blocked", "attempt": 0, "outer_tool": "call_discoverable_agent_tool", "real_tool": "freeze_card", "rule_id": "R03_REQUIRE_UNLOCK_BEFORE_DISCOVERABLE_CALL", "reason": "Discoverable tool 'freeze_card' must be unlocked first."}
+{"agent": "langgraph", "event": "guard_blocked", "attempt": 0, "outer_tool": "call_discoverable_agent_tool", "real_tool": "freeze_card", "rule_id": "R04_HIGH_RISK_WRITE_VERIFICATION_AND_APPROVAL", "reason": "High-risk operation 'freeze_card' requires prior verification."}
 {"agent": "langgraph", "event": "self_corrected", "attempt": 1, "new_tools": ["unlock_discoverable_agent_tool"]}

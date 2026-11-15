@@ -3,6 +3,16 @@ services:
     build: .
     ports:
       - "8000:8000"
+    environment:
+      - KNOWDESK_CHECKPOINTER_BACKEND=sqlite
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
     env_file:
       - .env.example
-    command: uv run --no-sync uvicorn service.app:app --host 0.0.0.0 --port 8000
+    depends_on:
+      - jaeger
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.62
+    ports:
+      - "16686:16686"
+      - "4318:4318"

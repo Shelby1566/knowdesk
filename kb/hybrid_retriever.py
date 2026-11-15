@@ -1,13 +1,19 @@
-from kb.loader import load_documents
-from kb.chunk import chunk_corpus
-from kb.tokenize import tokenize
+from typing import Any, Callable
+from agent.retrieval_check import BoundedReRetriever
+from agent.subagent import RetrievalSubAgent
 from kb.bm25 import BM25Index
+from kb.chunk import Chunk, chunk_corpus
 from kb.dense import DenseRetriever
 from kb.fusion import rrf_fusion
-from kb.router import map_doc_to_product_line, predict_product_lines_keyword, apply_intent_boost
+from kb.loader import load_documents
+from kb.router import apply_intent_boost, map_doc_to_product_line, predict_product_lines_keyword
+from kb.tokenize import tokenize
 
 class KnowDeskHybridRetriever:
-    """整合 M1(面包屑切块) + M2(手写BM25) + M5(Qwen3-Embedding-0.6B) + M6(RRF) + M8(产品线意图软加权)"""
+    """
+    整合 M1(面包屑切块) + Small-to-Big 父子块回拉 + M2(倒排BM25) + M5(Qwen3-Embedding)
+    + M6(RRF) + M8(意图软加权) + M14(有界重检索) + M15(检索子Agent上下文隔离)
+    """
     _instance = None
 
     @classmethod
@@ -20,6 +26,7 @@ class KnowDeskHybridRetriever:
         self.docs = load_documents()
         self.doc_map = {d.doc_id: d for d in self.docs}
         self.chunks = chunk_corpus(self.docs)
+        self.chunk_map = {c.chunk_id: c for c in self.chunks}
         self.chunk_to_doc = {c.chunk_id: c.doc_id for c in self.chunks}
         self.doc_to_line = {d.doc_id: map_doc_to_product_line(d.doc_id, d.title) for d in self.docs}
 
@@ -28,7 +35,41 @@ class KnowDeskHybridRetriever:
         self.bm25 = BM25Index.build(chunk_ids, chunk_texts, tokenize_fn=tokenize)
         self.dense = DenseRetriever.build_or_load("Qwen/Qwen3-Embedding-0.6B", chunk_ids, chunk_texts)
 
-    def search(self, query: str, k: int = 10) -> list[dict]:
+    def search_chunks(self, query: str, k: int = 10) -> list[tuple[Chunk, float]]:
+        """返回命中的子块 (Child Chunks) 及其 RRF 分数"""
+        b_res = self.bm25.search(query, k=50)
+        q_vec = self.dense.encode_query(query)
+        d_res = self.dense.store.search(q_vec, k=50)
+        fused = rrf_fusion([b_res, d_res], k=k, rrf_k=60)
+        return [(self.chunk_map[cid], sc) for cid, sc in fused if cid in self.chunk_map]
+
+    def search_parent_sections(self, query: str, k: int = 10) -> list[dict[str, Any]]:
+        """
+        Parent-Document Retrieval (Small-to-Big):
+        先通过细粒度子块精确匹配，再回拉所属 H2 完整章节与父文档标题，兼顾匹配精度与上下文完整性。
+        """
+        matched_chunks = self.search_chunks(query, k=k * 3)
+        seen_docs: set[str] = set()
+        results: list[dict[str, Any]] = []
+        for ch, sc in matched_chunks:
+            if ch.doc_id in seen_docs:
+                continue
+            seen_docs.add(ch.doc_id)
+            parent_doc = self.doc_map[ch.doc_id]
+            results.append({
+                "id": ch.doc_id,
+                "matched_chunk_id": ch.chunk_id,
+                "breadcrumb": ch.breadcrumb,
+                "title": parent_doc.title,
+                "parent_section_text": ch.text,
+                "content": parent_doc.content,
+                "score": round(sc, 5),
+            })
+            if len(results) >= k:
+                break
+        return results
+
+    def search(self, query: str, k: int = 10) -> list[dict[str, Any]]:
         bm25_res = self.bm25.search_docs(query, self.chunk_to_doc, k=50)
         dense_res = self.dense.search_docs(query, self.chunk_to_doc, k=50)
         rrf_res = rrf_fusion([bm25_res, dense_res], k=50, rrf_k=60)
@@ -41,3 +82,19 @@ class KnowDeskHybridRetriever:
             if d:
                 results.append({"id": d.doc_id, "title": d.title, "content": d.content, "score": round(sc, 5)})
         return results
+
+    def search_with_bounded_check(
+        self, query: str, judge_fn: Callable[[str, list[dict[str, Any]]], str], k: int = 10, max_retries: int = 2
+    ) -> dict[str, Any]:
+        """M14 接入主检索器：带充分性评估与查询改写的有界重检索"""
+        checker = BoundedReRetriever(self.search, judge_fn=judge_fn, max_retries=max_retries)
+        return checker.retrieve_with_check(query, k=k)
+
+    def search_with_subagent_isolation(
+        self, query: str, selector_fn: Callable[[str, list[Chunk]], list[tuple[str, str]]] | None = None, k: int = 5
+    ) -> list[dict[str, str]]:
+        """M15 接入主检索器：通过检索子 Agent 只向主 Agent 返回命中的 chunk_id 与原文精确摘录"""
+        cands = [ch for ch, _ in self.search_chunks(query, k=k * 3)]
+        default_sel = selector_fn or (lambda q, cs: [(c.chunk_id, "Top RRF matched policy section") for c in cs[:k]])
+        sub = RetrievalSubAgent(self.chunk_map, default_sel)
+        return sub.isolate_and_extract(query, cands, max_selected=k)

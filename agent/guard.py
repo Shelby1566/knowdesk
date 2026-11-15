@@ -1,4 +1,8 @@
+import base64
 import json
+import re
+import unicodedata
+import urllib.parse
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
@@ -6,6 +10,47 @@ import yaml
 from tools.schemas import StructuredToolError
 
 DEFAULT_RULES_PATH = Path(__file__).resolve().parent / "guard_rules.yaml"
+
+STRICT_VERIFICATION_TOOLS = frozenset({
+    "get_user_details",
+    "get_user_information_by_id",
+    "get_user_information_by_name",
+    "get_user_information_by_email",
+    "get_account_details",
+    "get_credit_card_details",
+    "get_credit_card_accounts_by_user",
+    "lookup_user",
+    "verify_user",
+    "authenticate_user",
+    "log_verification",
+})
+
+_ZERO_WIDTH_RE = re.compile(r"[\u200b-\u200f\u202a-\u202e\u2060\ufeff]")
+_B64_CANDIDATE_RE = re.compile(r"[A-Za-z0-9+/]{16,}={0,2}")
+
+def normalize_for_security_inspection(raw_text: str) -> str:
+    """
+    纵深防御归一化层 (Defense-in-Depth Normalization)：
+    1. 剥离零宽混淆字符；
+    2. Unicode NFKD 规范化（将全角字符如 ｉｇｎｏｒｅ 还原为标准 ASCII ignore）；
+    3. URL 解码；
+    4. 自动扫描并解码潜在的 Base64 编码载荷拼回检测文本。
+    """
+    s = _ZERO_WIDTH_RE.sub("", raw_text)
+    s = unicodedata.normalize("NFKD", s)
+    s = urllib.parse.unquote(s)
+    decoded_extras: list[str] = []
+    for match in _B64_CANDIDATE_RE.findall(s):
+        if len(match) % 4 == 0:
+            try:
+                dec = base64.b64decode(match, validate=True).decode("utf-8", errors="ignore")
+                if dec and any(c.isalpha() for c in dec):
+                    decoded_extras.append(dec)
+            except Exception:
+                pass
+    if decoded_extras:
+        s = s + " " + " ".join(decoded_extras)
+    return s.lower()
 
 @dataclass
 class SecurityState:
@@ -78,7 +123,7 @@ class GuardEngine:
         self.read_or_verify_tools = set(r04.get("read_or_verify_tools", []))
 
     def is_high_risk_write(self, tool_name: str, real_tool_name: str) -> bool:
-        if real_tool_name in self.read_or_verify_tools:
+        if real_tool_name in self.read_or_verify_tools or real_tool_name in STRICT_VERIFICATION_TOOLS:
             return False
         if real_tool_name.startswith(("get_", "list_", "search_", "check_", "view_", "calculate_", "verify_")):
             return False
@@ -96,10 +141,10 @@ class GuardEngine:
             )
             return GuardDecision("block", real_name, real_args, "R01_UNWRAP_MALFORMED_DISPATCH", parse_err, err)
 
-        serialized = json.dumps(real_args, ensure_ascii=False).lower()
+        normalized_payload = normalize_for_security_inspection(json.dumps(real_args, ensure_ascii=False))
         for bad in self.blocked_substrings:
-            if bad in serialized:
-                msg = f"Blocked prompt injection payload matching '{bad}'."
+            if bad in normalized_payload:
+                msg = f"Blocked prompt injection payload matching '{bad}' (after NFKD/Base64/URL normalization)."
                 err = StructuredToolError(
                     error_type="guard_blocked", message=msg, rule_id="R02_PROMPT_INJECTION_PAYLOAD"
                 )
@@ -137,12 +182,11 @@ class GuardEngine:
     def update_state_after_success(self, tool_name: str, raw_args: dict[str, Any] | str, sec_state: SecurityState) -> None:
         real_name, real_args, _ = unwrap_tool_call(tool_name, raw_args)
         if tool_name == "unlock_discoverable_agent_tool":
-            unlocked = str(real_args.get("agent_tool_name") or (raw_args.get("agent_tool_name", "") if isinstance(raw_args, dict) else "")).strip()
+            unlocked = str(
+                real_args.get("agent_tool_name")
+                or (raw_args.get("agent_tool_name", "") if isinstance(raw_args, dict) else "")
+            ).strip()
             if unlocked:
                 sec_state.unlocked_tools.add(unlocked)
-        if (
-            real_name in self.read_or_verify_tools
-            or real_name.startswith(("get_", "lookup_", "verify_", "authenticate_", "check_"))
-            or real_name == "log_verification"
-        ):
+        if real_name in STRICT_VERIFICATION_TOOLS or real_name.startswith(("verify_", "authenticate_")):
             sec_state.verified = True
