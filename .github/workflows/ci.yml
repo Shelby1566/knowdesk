@@ -4,13 +4,25 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout KnowDesk
+        uses: actions/checkout@v4
+        with:
+          path: knowdesk
+
       - name: Checkout pinned tau2-bench (033bf08)
+        uses: actions/checkout@v4
+        with:
+          repository: sierra-research/tau2-bench
+          ref: 033bf08
+          path: tau2-bench
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install dependencies (CPU fast mode) and run all 24 tests
+        working-directory: knowdesk
         run: |
-          git clone https://github.com/sierra-research/tau2-bench.git ../tau2-bench
-          git -C ../tau2-bench checkout 033bf08
-      - uses: astral-sh/setup-uv@v4
-      - name: Run unit tests
-        run: |
-          uv sync
-          uv run --no-sync pytest -v -W ignore -k "not consistency"
+          uv venv --python 3.12
+          uv pip install --extra-index-url https://download.pytorch.org/whl/cpu torch
+          uv pip install -e "../tau2-bench[knowledge]" faiss-cpu sentence-transformers "langgraph>=1.2.12,<2" "langgraph-checkpoint-sqlite>=3.0.0" "mcp>=2.0.0,<3" pytest httpx
+          uv run --no-sync pytest -v -W ignore
