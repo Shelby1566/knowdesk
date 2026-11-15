@@ -1,0 +1,33 @@
+[project]
+name = "knowdesk"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Shelby1566", email = "885550860@qq.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "faiss-cpu>=1.16.0",
+    "langgraph>=1.2.12,<2",
+    "langgraph-checkpoint-sqlite>=3.0.0",
+    "mcp>=2.0.0,<3",
+    "pytest>=9.2.0",
+    "sentence-transformers>=6.3.0",
+    "tau2[knowledge]",
+]
+
+[project.scripts]
+knowdesk = "knowdesk:main"
+
+[build-system]
+requires = ["uv_build>=0.13.7,<0.14.0"]
+build-backend = "uv_build"
+
+[tool.uv.sources]
+tau2 = { path = "../tau2-bench", editable = true }
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+norecursedirs = [".venv", ".cache", ".git", "build", "dist"]
