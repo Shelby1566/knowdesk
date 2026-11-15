@@ -1,6 +1,6 @@
 import math
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable
 from kb.tokenize import tokenize
 
@@ -14,6 +14,7 @@ class BM25Index:
     tokenize_fn: Callable[[str], list[str]] = tokenize
     k1: float = 1.5
     b: float = 0.75
+    inverted_index: dict[str, list[tuple[int, int]]] = field(default_factory=dict)
 
     @classmethod
     def build(
@@ -45,10 +46,16 @@ class BM25Index:
             raw_idf[word] = math.log(n_docs - freq + 0.5) - math.log(freq + 0.5)
 
         avg_idf = sum(raw_idf.values()) / len(raw_idf) if raw_idf else 0.0
+        floor_idf = epsilon * avg_idf if avg_idf > 0 else epsilon
         idf: dict[str, float] = {
-            word: (epsilon * avg_idf if val < 0 else val)
+            word: (floor_idf if val <= 0 else val)
             for word, val in raw_idf.items()
         }
+
+        inverted_index: dict[str, list[tuple[int, int]]] = {}
+        for i, counts in enumerate(doc_freqs):
+            for word, count in counts.items():
+                inverted_index.setdefault(word, []).append((i, count))
 
         return cls(
             item_ids=item_ids,
@@ -59,6 +66,7 @@ class BM25Index:
             tokenize_fn=tokenize_fn,
             k1=k1,
             b=b,
+            inverted_index=inverted_index,
         )
 
     def score_all(self, query: str) -> list[float]:
@@ -67,21 +75,20 @@ class BM25Index:
         if not q_tokens or self.avgdl == 0.0:
             return scores
 
-        for i, freq_map in enumerate(self.doc_freqs):
-            dl = self.doc_lens[i]
-            norm = 1.0 - self.b + self.b * (dl / self.avgdl)
-            s = 0.0
-            for t in q_tokens:
-                f = freq_map.get(t, 0)
-                if f == 0:
-                    continue
-                w_idf = self.idf.get(t, 0.0)
-                s += w_idf * (f * (self.k1 + 1.0)) / (f + self.k1 * norm)
-            scores[i] = s
+        q_counts = Counter(q_tokens)
+        for t, _ in q_counts.items():
+            if t not in self.inverted_index:
+                continue
+            w_idf = self.idf.get(t, 0.0)
+            for i, f in self.inverted_index[t]:
+                dl = self.doc_lens[i]
+                norm = 1.0 - self.b + self.b * (dl / self.avgdl)
+                scores[i] += w_idf * (f * (self.k1 + 1.0)) / (f + self.k1 * norm)
         return scores
 
     def search(self, query: str, k: int = 10) -> list[tuple[str, float]]:
-        if not self.tokenize_fn(query):
+        q_tokens = self.tokenize_fn(query)
+        if not q_tokens:
             return []
         scores = self.score_all(query)
         ranked = sorted(zip(self.item_ids, scores), key=lambda x: x[1], reverse=True)

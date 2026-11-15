@@ -1,4 +1,5 @@
 import json
+import pytest
 from langgraph.types import Command
 from kb.loader import DEFAULT_TASKS_PATH
 from tools.schemas import SufficiencyOutput, validate_structured_output
@@ -29,6 +30,8 @@ def test_m11_retry_and_idempotency():
     assert w_calls == 1
 
 def test_m12_guard_and_97_gold_zero_false_positives():
+    if not DEFAULT_TASKS_PATH.exists():
+        pytest.skip(f"Tasks file not found at {DEFAULT_TASKS_PATH}")
     raw_tasks = json.loads(DEFAULT_TASKS_PATH.read_text(encoding="utf-8"))
     guard = GuardEngine(enforce_unlock=True, enforce_verification=False, require_human_confirm_on_write=False)
     fp = 0

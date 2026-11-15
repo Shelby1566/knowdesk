@@ -1,6 +1,6 @@
 import re
-import re
-from kb.loader import Document, load_documents
+import pytest
+from kb.loader import Document, load_documents, DEFAULT_DOCS_DIR
 from kb.chunk import Chunk, chunk_document, chunk_corpus
 
 def test_single_doc_with_intro_and_two_h2():
@@ -34,6 +34,8 @@ def test_code_block_hash_not_split():
 
 def test_full_corpus_698_docs_and_determinism():
     """验收 ②③④：全库698篇一篇不丢、正文拼接无损、两次运行确定性一致"""
+    if not DEFAULT_DOCS_DIR.exists():
+        pytest.skip(f"Corpus docs not found at {DEFAULT_DOCS_DIR}")
     docs = load_documents()
     assert len(docs) == 698
 

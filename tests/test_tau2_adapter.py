@@ -1,5 +1,13 @@
+import pytest
 from unittest.mock import patch
-from tau2.data_model.message import AssistantMessage, ToolCall, UserMessage
+try:
+    from tau2.data_model.message import AssistantMessage, ToolCall, UserMessage
+except ImportError:
+    AssistantMessage = None
+
+if AssistantMessage is None:
+    pytest.skip("tau2 not installed or tau2-bench not found", allow_module_level=True)
+
 from adapters.tau2_adapter import KnowDeskPlainTauAgent, KnowDeskGraphTauAgent, GUARD_TRACE_PATH
 
 def _make_assistant_tc(call_id: str, name: str, arguments: dict) -> AssistantMessage:

@@ -1,33 +1,35 @@
-import litellm
-for _m, (_in_rmb, _out_rmb) in [
-    ("dashscope/qwen3.8-flash", (0.8, 2.7)), ("qwen3.8-flash", (0.8, 2.7)),
-    ("dashscope/deepseek-v4.1-flash-1017", (1.0, 4.0)), ("deepseek-v4.1-flash-1017", (1.0, 4.0)),
-]:
-    litellm.model_cost[_m] = {
-        "max_tokens": 32768,
-        "input_cost_per_token": _in_rmb / 1e6 / 7.2,
-        "output_cost_per_token": _out_rmb / 1e6 / 7.2,
-        "litellm_provider": "dashscope",
-        "mode": "chat",
-    }
 import json
 import operator
 import os
 from pathlib import Path
 from typing import Annotated, Any, TypedDict
 
+import litellm
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
 from tau2.agent.llm_agent import LLMAgent, generate
-from tau2.data_model.message import AssistantMessage, MultiToolMessage, SystemMessage, ToolMessage, UserMessage
+from tau2.data_model.message import AssistantMessage, MultiToolMessage, ToolMessage, UserMessage
 from tau2.knowledge.retrievers.bm25_retriever import BM25Retriever
 from tau2.registry import registry
 
-from agent.guard import GuardEngine, SecurityState, unwrap_tool_call
+from agent.guard import GuardEngine, SecurityState
 from kb.hybrid_retriever import KnowDeskHybridRetriever
 
 PROMPT_V1_PATH = Path(__file__).resolve().parents[1] / "agent/prompts/v1.md"
 GUARD_TRACE_PATH = Path(__file__).resolve().parents[1] / "obs/guard_events.jsonl"
+
+def register_litellm_pricing() -> None:
+    for _m, (_in_rmb, _out_rmb) in [
+        ("dashscope/qwen3.8-flash", (0.8, 2.7)), ("qwen3.8-flash", (0.8, 2.7)),
+        ("dashscope/deepseek-v4.1-flash-1017", (1.0, 4.0)), ("deepseek-v4.1-flash-1017", (1.0, 4.0)),
+    ]:
+        litellm.model_cost[_m] = {
+            "max_tokens": 32768,
+            "input_cost_per_token": _in_rmb / 1e6 / 7.2,
+            "output_cost_per_token": _out_rmb / 1e6 / 7.2,
+            "litellm_provider": "dashscope",
+            "mode": "chat",
+        }
 
 def load_sop_prompt(prompt_path: Path | None = None) -> str:
     if prompt_path is None:
@@ -59,7 +61,6 @@ _ORIG_BM25_RETRIEVE = BM25Retriever.retrieve
 _ORIG_BM25_RETRIEVE_BATCH = BM25Retriever.retrieve_batch
 
 def patch_retrieval_mode(mode: str = "hybrid") -> None:
-    """mode='hybrid' 时将 τ 的 KB_search 切换为 KnowDesk 混合检索；mode='builtin' 时恢复原生 BM25"""
     if mode == "hybrid":
         retriever = KnowDeskHybridRetriever.get_instance()
 
@@ -80,23 +81,33 @@ def patch_retrieval_mode(mode: str = "hybrid") -> None:
         BM25Retriever.retrieve = _ORIG_BM25_RETRIEVE
         BM25Retriever.retrieve_batch = _ORIG_BM25_RETRIEVE_BATCH
 
-def _update_sec_from_last_turn(state: Any, guard: GuardEngine, sec: SecurityState) -> None:
-    """当上一轮工具在 τ 环境中成功执行后，根据最后一条 AssistantMessage 的 tool_calls 更新安全状态"""
+def _update_sec_from_last_turn(state: Any, incoming_msg: Any, guard: GuardEngine, sec: SecurityState) -> None:
+    """检查环境返回的 ToolMessage 是否成功，仅在非错误返回时更新核身与解锁状态"""
+    tool_msgs = incoming_msg.tool_messages if isinstance(incoming_msg, MultiToolMessage) else [incoming_msg]
+    failed_ids: set[str] = set()
+    for tm in tool_msgs:
+        tm_id = str(getattr(tm, "id", ""))
+        content_low = str(getattr(tm, "content", "")).lower()
+        if getattr(tm, "error", False) or "error:" in content_low or "not found" in content_low:
+            failed_ids.add(tm_id)
+
     for msg in reversed(state.messages):
         if isinstance(msg, AssistantMessage) and getattr(msg, "tool_calls", None):
             for tc in msg.tool_calls:
-                guard.update_state_after_success(tc.name, tc.arguments, sec)
+                if str(getattr(tc, "id", "")) not in failed_ids:
+                    guard.update_state_after_success(tc.name, tc.arguments, sec)
             break
 
 class KnowDeskPlainTauAgent(LLMAgent):
-    """M9 无框架手写循环接入 τ-bench（支持回合内 Guard 拦截与模型自纠）"""
     def __init__(self, tools, domain_policy: str, llm: str, llm_args: dict | None = None, **kwargs):
-        sop = load_sop_prompt()
-        enhanced_policy = f"{domain_policy}\n\n{sop}"
+        register_litellm_pricing()
+        tool_names = {getattr(t, "name", "") for t in (tools or [])}
+        is_banking = "KB_search" in tool_names or "unlock_discoverable_agent_tool" in tool_names
+        enhanced_policy = f"{domain_policy}\n\n{load_sop_prompt()}" if is_banking else domain_policy
         super().__init__(tools=tools, domain_policy=enhanced_policy, llm=llm, llm_args=llm_args)
         enable_guard = os.getenv("KNOWDESK_GUARD", "1") != "0"
         self.guard = GuardEngine(
-            enforce_unlock=enable_guard,
+            enforce_unlock=enable_guard and is_banking,
             enforce_verification=enable_guard,
             require_human_confirm_on_write=False,
         )
@@ -109,7 +120,7 @@ class KnowDeskPlainTauAgent(LLMAgent):
         sec = self._sec_by_state.setdefault(id(state), SecurityState())
 
         if isinstance(message, (ToolMessage, MultiToolMessage)):
-            _update_sec_from_last_turn(state, self.guard, sec)
+            _update_sec_from_last_turn(state, message, self.guard, sec)
             state.messages.extend(message.tool_messages if isinstance(message, MultiToolMessage) else [message])
         else:
             state.messages.append(message)
@@ -132,12 +143,10 @@ class KnowDeskPlainTauAgent(LLMAgent):
                     blocked_decisions.append((tc, dec))
 
             if not blocked_decisions or attempt == self.max_guard_retries:
-                # 若经过前一次拦截后本次通过，记录自纠成功事件
                 if attempt > 0 and not blocked_decisions:
                     log_guard_event({"agent": "plain", "event": "self_corrected", "attempt": attempt, "new_tools": [t.name for t in tcs]})
                 return assistant_msg
 
-            # 发生 Guard 拦截：仅在 scratch_messages 内追加错误提示让模型重生成，不污染 τ 的 state.messages
             scratch_messages.append(assistant_msg)
             for tc, dec in blocked_decisions:
                 log_guard_event({
@@ -155,14 +164,13 @@ class _TurnGraphState(TypedDict, total=False):
     attempt: int
 
 class KnowDeskGraphTauAgent(KnowDeskPlainTauAgent):
-    """M10 LangGraph StateGraph 接入 τ-bench（通过 agent -> guard 条件边驱动回合内自纠）"""
     def _generate_next_message(self, message, state) -> AssistantMessage:
         if isinstance(message, UserMessage) and message.is_audio:
             raise ValueError("Audio not supported.")
         sec = self._sec_by_state.setdefault(id(state), SecurityState())
 
         if isinstance(message, (ToolMessage, MultiToolMessage)):
-            _update_sec_from_last_turn(state, self.guard, sec)
+            _update_sec_from_last_turn(state, message, self.guard, sec)
             state.messages.extend(message.tool_messages if isinstance(message, MultiToolMessage) else [message])
         else:
             state.messages.append(message)
@@ -217,6 +225,7 @@ class KnowDeskGraphTauAgent(KnowDeskPlainTauAgent):
         return out["candidate_msg"]
 
 def register_knowdesk_components() -> None:
+    register_litellm_pricing()
     mode = os.getenv("KNOWDESK_RETRIEVAL", "hybrid")
     patch_retrieval_mode(mode)
     existing = set(registry.get_agents()) if hasattr(registry, "get_agents") else set()

@@ -15,6 +15,7 @@ class AgentGraphState(TypedDict, total=False):
     unlocked_tools: list[str]
     approved_keys: list[str]
     pending_tool_call: dict[str, Any] | None
+    pending_tool_calls: list[dict[str, Any]]
     guard_route: str
     approval_decision: dict[str, Any] | None
     steps: int
@@ -34,6 +35,7 @@ def build_knowdesk_graph(
     """
     M10: LangGraph 主状态图
     核心设计：agent -> guard (纯判断无副作用) -> human_confirm (只调用 interrupt，重跑安全) -> tool_exec (幂等执行)
+    支持单轮批量 tool_calls 并发分发与顺序安全检查执行。
     """
     def agent_node(state: AgentGraphState) -> dict[str, Any]:
         steps = state.get("steps", 0) + 1
@@ -41,11 +43,15 @@ def build_knowdesk_graph(
         tcs = resp.get("tool_calls") or []
         msg = {"role": "assistant", "content": resp.get("content", ""), "tool_calls": tcs}
         if not tcs:
-            return {"messages": [msg], "steps": steps, "pending_tool_call": None, "stop_reason": "completed"}
-        return {"messages": [msg], "steps": steps, "pending_tool_call": tcs[0]}
+            return {"messages": [msg], "steps": steps, "pending_tool_call": None, "pending_tool_calls": [], "stop_reason": "completed"}
+        return {"messages": [msg], "steps": steps, "pending_tool_calls": list(tcs), "pending_tool_call": tcs[0]}
 
     def guard_node(state: AgentGraphState) -> dict[str, Any]:
-        tc = state.get("pending_tool_call") or {}
+        queue = list(state.get("pending_tool_calls") or [])
+        if not queue and state.get("pending_tool_call"):
+            queue = [state["pending_tool_call"]]
+        tc = queue.pop(0) if queue else {}
+
         t_name = tc.get("name", "")
         t_args = tc.get("arguments", {})
         tc_id = tc.get("id", "call_1")
@@ -75,11 +81,13 @@ def build_knowdesk_graph(
                 "content": decision.error_payload.to_tool_message(),
             }
             stop = "max_guard_blocks_exceeded" if blocks >= max_guard_blocks else ""
+            route = "end" if stop else ("guard" if queue else "agent")
             return {
                 "messages": [err_msg],
                 "guard_blocks": blocks,
-                "guard_route": "end" if stop else "agent",
+                "guard_route": route,
                 "stop_reason": stop,
+                "pending_tool_calls": queue,
                 "pending_tool_call": None,
             }
 
@@ -88,8 +96,8 @@ def build_knowdesk_graph(
             "real_name": decision.real_tool_name, "real_args": decision.real_args, "idem_key": idem_key,
         }
         if decision.action == "require_approval":
-            return {"pending_tool_call": enriched_tc, "guard_route": "human_confirm"}
-        return {"pending_tool_call": enriched_tc, "guard_route": "tool_exec"}
+            return {"pending_tool_call": enriched_tc, "pending_tool_calls": queue, "guard_route": "human_confirm"}
+        return {"pending_tool_call": enriched_tc, "pending_tool_calls": queue, "guard_route": "tool_exec"}
 
     def human_confirm_node(state: AgentGraphState) -> dict[str, Any]:
         """独立人工确认节点：只调用 interrupt()，绝不执行任何工具或写库副作用！"""
@@ -134,11 +142,14 @@ def build_knowdesk_graph(
             message=f"Human supervisor rejected '{tc.get('real_name')}': {(res or {}).get('reason', 'No reason')}",
             retryable=False,
         )
+        queue = list(state.get("pending_tool_calls") or [])
+        route = "guard" if queue else "agent"
         return {
             "confirm_enter_count": enter_cnt,
             "messages": [{"role": "tool", "tool_call_id": tc.get("id", "call_1"), "name": tc.get("name", ""), "content": rej_err.to_tool_message()}],
             "pending_tool_call": None,
-            "approval_decision": {"route": "agent"},
+            "pending_tool_calls": queue,
+            "approval_decision": {"route": route},
         }
 
     def tool_exec_node(state: AgentGraphState) -> dict[str, Any]:
@@ -179,13 +190,13 @@ def build_knowdesk_graph(
     builder.add_edge(START, "agent")
     builder.add_conditional_edges(
         "agent",
-        lambda s: "guard" if s.get("pending_tool_call") else END,
+        lambda s: "guard" if (s.get("pending_tool_calls") or s.get("pending_tool_call")) else END,
         {"guard": "guard", END: END},
     )
     builder.add_conditional_edges(
         "guard",
         lambda s: s.get("guard_route", "tool_exec"),
-        {"tool_exec": "tool_exec", "human_confirm": "human_confirm", "agent": "agent", "end": END},
+        {"tool_exec": "tool_exec", "human_confirm": "human_confirm", "agent": "agent", "guard": "guard", "end": END},
     )
     builder.add_conditional_edges(
         "human_confirm",
@@ -194,7 +205,7 @@ def build_knowdesk_graph(
     )
     builder.add_conditional_edges(
         "tool_exec",
-        lambda s: END if s.get("steps", 0) >= max_steps else "agent",
-        {"agent": "agent", END: END},
+        lambda s: "guard" if s.get("pending_tool_calls") else (END if s.get("steps", 0) >= max_steps else "agent"),
+        {"guard": "guard", "agent": "agent", END: END},
     )
     return builder.compile(checkpointer=checkpointer or InMemorySaver())

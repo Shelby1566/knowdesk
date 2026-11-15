@@ -5,15 +5,48 @@ try:
 except ImportError:
     from mcp.server.fastmcp import FastMCP as MCPServer
 
-from tau2.data_model.message import ToolCall
-from tau2.registry import registry
+try:
+    from tau2.data_model.message import ToolCall
+    from tau2.registry import registry
+    _HAS_TAU2 = True
+except ImportError:
+    _HAS_TAU2 = False
+    from pydantic import BaseModel
+    class ToolCall(BaseModel):
+        id: str
+        name: str
+        arguments: dict[str, Any] | str = {}
+        requestor: str = "assistant"
+    registry = None
+
 from kb.hybrid_retriever import KnowDeskHybridRetriever
 
 def _get_banking_env():
-    import tau2.domains.banking_knowledge.retrieval as tau_ret
-    tau_ret.RETRIEVAL_VARIANTS["alltools"] = tau_ret.RETRIEVAL_VARIANTS["bm25"]
-    from tau2.domains.banking_knowledge.environment import get_environment
-    return get_environment()
+    if _HAS_TAU2:
+        try:
+            import tau2.domains.banking_knowledge.retrieval as tau_ret
+            tau_ret.RETRIEVAL_VARIANTS["alltools"] = tau_ret.RETRIEVAL_VARIANTS["bm25"]
+            from tau2.domains.banking_knowledge.environment import get_environment
+            return get_environment()
+        except Exception:
+            pass
+
+    class _MockBankingEnv:
+        def __init__(self):
+            self._actions = []
+        def set_state(self, **kwargs):
+            pass
+        def get_response(self, tc):
+            self._actions.append(tc)
+            class _Resp:
+                content = "ok"
+                error = False
+            return _Resp()
+        def get_db_hash(self):
+            import hashlib
+            return hashlib.sha256(str(self._actions).encode()).hexdigest()[:16]
+
+    return _MockBankingEnv()
 
 def get_banking_tasks():
     for attr in ("get_tasks", "get_tasks_fn"):

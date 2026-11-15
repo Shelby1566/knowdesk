@@ -25,12 +25,14 @@ class ReliableToolExecutor:
         max_delay: float = 4.0,
         sleep_fn: Callable[[float], None] = time.sleep,
         rng_fn: Callable[[float, float], float] = random.uniform,
+        max_cache_size: int = 1000,
     ):
         self.max_retries = max_retries
         self.base_delay = base_delay
         self.max_delay = max_delay
         self.sleep_fn = sleep_fn
         self.rng_fn = rng_fn
+        self.max_cache_size = max_cache_size
         self.idempotency_store: dict[str, str] = {}
         self.last_call_tracker: dict[str, tuple[str, int]] = {}
         self.duplicate_intercept_count: int = 0
@@ -69,6 +71,9 @@ class ReliableToolExecutor:
                 raw_out = func(args)
                 out_str = raw_out if isinstance(raw_out, str) else json.dumps(raw_out, ensure_ascii=False)
                 if is_write:
+                    if len(self.idempotency_store) >= self.max_cache_size and idem_key not in self.idempotency_store:
+                        first_key = next(iter(self.idempotency_store))
+                        del self.idempotency_store[first_key]
                     self.idempotency_store[idem_key] = out_str
                 return out_str
             except InvalidArgumentToolException as e:
@@ -85,3 +90,7 @@ class ReliableToolExecutor:
                 cap = min(self.max_delay, self.base_delay * (2 ** attempt))
                 self.sleep_fn(self.rng_fn(0.0, cap))
                 attempt += 1
+            except Exception as e:
+                return StructuredToolError(
+                    error_type="upstream_error", message=f"Unexpected tool error: {e}", retryable=False
+                ).to_tool_message()

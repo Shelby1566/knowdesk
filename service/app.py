@@ -64,6 +64,13 @@ def create_knowdesk_app(
     jobs_store: dict[str, dict[str, Any]] = {}
     latencies_ms: list[float] = []
     error_count = 0
+    MAX_CACHE_SIZE = 1000
+
+    def _set_lru(d: dict[str, Any], k: str, v: Any, max_size: int = MAX_CACHE_SIZE) -> None:
+        if len(d) >= max_size and k not in d:
+            first = next(iter(d))
+            del d[first]
+        d[k] = v
 
     def _session_exists(sid: str) -> bool:
         if sid in sessions_meta:
@@ -80,8 +87,8 @@ def create_knowdesk_app(
     @app.post("/sessions")
     def create_session(verified: bool = True):
         sid = f"sess_{uuid.uuid4().hex[:10]}"
-        sessions_meta[sid] = {"created_at": time.time(), "verified": verified}
-        tracers[sid] = GenAITracer()
+        _set_lru(sessions_meta, sid, {"created_at": time.time(), "verified": verified})
+        _set_lru(tracers, sid, GenAITracer())
         cfg = {"configurable": {"thread_id": sid}}
         graph.update_state(cfg, {"session_id": sid, "messages": [], "verified": verified})
         return {"session_id": sid, "verified": verified}
@@ -107,6 +114,8 @@ def create_knowdesk_app(
             st = graph.get_state(cfg)
             elapsed = (time.perf_counter() - t0) * 1000.0
             latencies_ms.append(elapsed)
+            if len(latencies_ms) > MAX_CACHE_SIZE:
+                latencies_ms.pop(0)
 
             if st.next and "human_confirm" in st.next:
                 pending = st.values.get("pending_tool_call") or {}
@@ -142,7 +151,7 @@ def create_knowdesk_app(
         msgs = out.get("messages", [])
         reply = msgs[-1].get("content", "") if msgs else ""
         result = {"session_id": session_id, "status": "resumed", "decision": req.decision, "reply": reply}
-        approval_cache[dedup_key] = result
+        _set_lru(approval_cache, dedup_key, result)
         return result
 
     @app.get("/sessions/{session_id}/trace")
@@ -174,8 +183,9 @@ def create_knowdesk_app(
     @app.post("/jobs")
     def create_job(req: JobRequest):
         jid = f"job_{uuid.uuid4().hex[:8]}"
-        jobs_store[jid] = {"job_id": jid, "job_type": req.job_type, "status": "completed", "result": {"pass_1": 0.40}}
-        return jobs_store[jid]
+        res = {"job_id": jid, "job_type": req.job_type, "status": "completed", "result": {"pass_1": 0.40}}
+        _set_lru(jobs_store, jid, res)
+        return res
 
     @app.get("/jobs/{job_id}")
     def get_job(job_id: str):

@@ -143,6 +143,6 @@ class GuardEngine:
         if (
             real_name in self.read_or_verify_tools
             or real_name.startswith(("get_", "lookup_", "verify_", "authenticate_", "check_"))
-            or any(k in real_args for k in ("user_id", "account_id", "customer_id", "email"))
+            or real_name == "log_verification"
         ):
             sec_state.verified = True
