@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>KnowDesk Banking Agent & Trace Console</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; display: flex; height: 100vh; background: #0f172a; color: #f8fafc; }
+    .col { flex: 1; padding: 20px; display: flex; flex-direction: column; border-right: 1px solid #334155; }
+    .box { flex: 1; overflow-y: auto; background: #1e293b; padding: 14px; border-radius: 8px; margin-bottom: 12px; }
+    button { background: #3b82f6; color: #fff; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; margin-right: 6px; }
+    button.reject { background: #ef4444; }
+    input { flex: 1; padding: 8px; border-radius: 6px; border: 1px solid #475569; background: #0f172a; color: #fff; }
+    .span-item { border-left: 3px solid #38bdf8; padding-left: 10px; margin-bottom: 10px; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="col">
+    <h3>💬 KnowDesk Ticket Chat (SSE Stream + Guard Approval)</h3>
+    <div id="chat" class="box"></div>
+    <div id="approval-bar" style="display:none; margin-bottom:10px;">
+      <span>⚠️ High-Risk Write Intercepted by Guard: </span>
+      <button onclick="approve('approve')">✅ Approve</button>
+      <button class="reject" onclick="approve('reject')">❌ Reject</button>
+    </div>
+    <div style="display:flex; gap:8px;">
+      <input id="msg" placeholder="e.g. Please freeze my lost credit card..." value="Please freeze my credit card immediately." />
+      <button onclick="send()">Send</button>
+    </div>
+  </div>
+  <div class="col">
+    <h3>🔍 OpenTelemetry GenAI Trace Timeline</h3>
+    <div id="trace" class="box"></div>
+  </div>
+  <script>
+    let sid = null;
+    async function init() {
+      const r = await fetch('/sessions', {method:'POST'});
+      const d = await r.json();
+      sid = d.session_id;
+    }
+    async function send() {
+      if (!sid) await init();
+      const text = document.getElementById('msg').value;
+      document.getElementById('chat').innerHTML += `<div><b>User:</b> ${text}</div>`;
+      const resp = await fetch(`/sessions/${sid}/messages`, {
+        method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({content:text})
+      });
+      const raw = await resp.text();
+      if (raw.includes('awaiting_approval')) {
+        document.getElementById('chat').innerHTML += `<div style="color:#fbbf24">⏸️ [Guard] Paused at human_confirm node awaiting supervisor approval.</div>`;
+        document.getElementById('approval-bar').style.display = 'block';
+      } else {
+        document.getElementById('chat').innerHTML += `<div><b>Agent:</b> ${raw}</div>`;
+      }
+      await loadTrace();
+    }
+    async function approve(decision) {
+      const r = await fetch(`/sessions/${sid}/approvals`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({decision, reason:'Supervisor action', idempotency_key: 'ui_' + Date.now()})
+      });
+      const d = await r.json();
+      document.getElementById('approval-bar').style.display = 'none';
+      document.getElementById('chat').innerHTML += `<div><b>Agent (${decision}):</b> ${d.reply}</div>`;
+      await loadTrace();
+    }
+    async function loadTrace() {
+      const r = await fetch(`/sessions/${sid}/trace`);
+      const d = await r.json();
+      document.getElementById('trace').innerHTML = d.spans.map(s =>
+        `<div class="span-item"><b>${s.name}</b> (${s.duration_ms} ms)<br/><code>${JSON.stringify(s.attributes)}</code></div>`
+      ).join('');
+    }
+    init();
+  </script>
+</body>
+</html>
