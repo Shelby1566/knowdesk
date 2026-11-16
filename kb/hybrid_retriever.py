@@ -1,6 +1,7 @@
 from typing import Any, Callable
 from agent.retrieval_check import BoundedReRetriever
 from agent.subagent import RetrievalSubAgent
+from kb.acl import AccessControlContext, can_access, infer_document_acl
 from kb.bm25 import BM25Index
 from kb.chunk import Chunk, chunk_corpus
 from kb.dense import DenseRetriever
@@ -29,27 +30,41 @@ class KnowDeskHybridRetriever:
         self.chunk_map = {c.chunk_id: c for c in self.chunks}
         self.chunk_to_doc = {c.chunk_id: c.doc_id for c in self.chunks}
         self.doc_to_line = {d.doc_id: map_doc_to_product_line(d.doc_id, d.title) for d in self.docs}
+        self.doc_acl = {d.doc_id: infer_document_acl(d.doc_id, d.title, d.content) for d in self.docs}
 
         chunk_ids = [c.chunk_id for c in self.chunks]
         chunk_texts = [c.text for c in self.chunks]
         self.bm25 = BM25Index.build(chunk_ids, chunk_texts, tokenize_fn=tokenize)
         self.dense = DenseRetriever.build_or_load("Qwen/Qwen3-Embedding-0.6B", chunk_ids, chunk_texts)
 
-    def search_chunks(self, query: str, k: int = 10, fusion_mode: str = "adaptive_rrf") -> list[tuple[Chunk, float]]:
-        """返回命中的子块 (Child Chunks) 及其 RRF / AdaRRF 分数"""
+    def search_chunks(
+        self, query: str, k: int = 10, fusion_mode: str = "adaptive_rrf", acl: AccessControlContext | None = None
+    ) -> list[tuple[Chunk, float]]:
+        """返回命中的子块 (Child Chunks) 及其 RRF / AdaRRF 分数，支持零信任 ACL 过滤"""
         b_res = self.bm25.search(query, k=50)
         q_vec = self.dense.encode_query(query)
         d_res = self.dense.store.search(q_vec, k=50)
         fuse_fn = adaptive_rrf_fusion if fusion_mode == "adaptive_rrf" else rrf_fusion
-        fused = fuse_fn([b_res, d_res], k=k, rrf_k=60)
-        return [(self.chunk_map[cid], sc) for cid, sc in fused if cid in self.chunk_map]
+        fused = fuse_fn([b_res, d_res], k=k * 2, rrf_k=60)
+        results: list[tuple[Chunk, float]] = []
+        for cid, sc in fused:
+            if cid in self.chunk_map:
+                ch = self.chunk_map[cid]
+                if acl is not None and not can_access(self.doc_acl.get(ch.doc_id), acl):
+                    continue
+                results.append((ch, sc))
+                if len(results) >= k:
+                    break
+        return results
 
-    def search_parent_sections(self, query: str, k: int = 10, fusion_mode: str = "adaptive_rrf") -> list[dict[str, Any]]:
+    def search_parent_sections(
+        self, query: str, k: int = 10, fusion_mode: str = "adaptive_rrf", acl: AccessControlContext | None = None
+    ) -> list[dict[str, Any]]:
         """
         Parent-Document Retrieval (Small-to-Big):
         先通过细粒度子块精确匹配，再回拉所属 H2 完整章节与父文档标题，兼顾匹配精度与上下文完整性。
         """
-        matched_chunks = self.search_chunks(query, k=k * 3, fusion_mode=fusion_mode)
+        matched_chunks = self.search_chunks(query, k=k * 3, fusion_mode=fusion_mode, acl=acl)
         seen_docs: set[str] = set()
         results: list[dict[str, Any]] = []
         for ch, sc in matched_chunks:
@@ -70,13 +85,26 @@ class KnowDeskHybridRetriever:
                 break
         return results
 
-    def search(self, query: str, k: int = 10, fusion_mode: str = "adaptive_rrf") -> list[dict[str, Any]]:
+    def search(
+        self, query: str, k: int = 10, fusion_mode: str = "adaptive_rrf", acl: AccessControlContext | None = None
+    ) -> list[dict[str, Any]]:
         bm25_res = self.bm25.search_docs(query, self.chunk_to_doc, k=50)
         dense_res = self.dense.search_docs(query, self.chunk_to_doc, k=50)
         fuse_fn = adaptive_rrf_fusion if fusion_mode == "adaptive_rrf" else rrf_fusion
         rrf_res = fuse_fn([bm25_res, dense_res], k=50, rrf_k=60)
         pred_lines = predict_product_lines_keyword(query)
-        boosted = apply_intent_boost(rrf_res, self.doc_to_line, pred_lines, beta=0.15, k=k)
+        boosted = apply_intent_boost(rrf_res, self.doc_to_line, pred_lines, beta=0.15, k=k * 2)
+
+        results = []
+        for did, sc in boosted:
+            d = self.doc_map.get(did)
+            if d:
+                if acl is not None and not can_access(self.doc_acl.get(did), acl):
+                    continue
+                results.append({"id": d.doc_id, "title": d.title, "content": d.content, "score": round(sc, 5)})
+                if len(results) >= k:
+                    break
+        return results
 
         results = []
         for did, sc in boosted:

@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 import yaml
+from agent.model_armor import VertexModelArmor, ArmorVerdict
 from tools.schemas import StructuredToolError
 
 DEFAULT_RULES_PATH = Path(__file__).resolve().parent / "guard_rules.yaml"
@@ -193,6 +194,11 @@ class GuardEngine:
         r04 = self.rules.get("R04_HIGH_RISK_WRITE_VERIFICATION_AND_APPROVAL", {})
         self.high_risk_prefixes = tuple(r04.get("high_risk_prefixes", []))
         self.read_or_verify_tools = set(r04.get("read_or_verify_tools", []))
+        self.model_armor = VertexModelArmor()
+
+    def inspect_output(self, response_text: str) -> ArmorVerdict:
+        """调用 VertexModelArmor 出口防护盾：阻断未脱敏 PII 泄露与虚假绝对金融承诺"""
+        return self.model_armor.inspect_output(response_text)
 
     def is_high_risk_write(self, tool_name: str, real_tool_name: str) -> bool:
         if real_tool_name in self.read_or_verify_tools or real_tool_name in STRICT_VERIFICATION_TOOLS:
@@ -214,6 +220,13 @@ class GuardEngine:
             return GuardDecision("block", real_name, real_args, "R01_UNWRAP_MALFORMED_DISPATCH", parse_err, err)
 
         normalized_payload = normalize_for_security_inspection(json.dumps(real_args, ensure_ascii=False))
+        armor_in = self.model_armor.inspect_input(normalized_payload)
+        if not armor_in.passed:
+            err = StructuredToolError(
+                error_type="guard_blocked", message=armor_in.reason, rule_id="R02_PROMPT_INJECTION_PAYLOAD"
+            )
+            return GuardDecision("block", real_name, real_args, "R02_PROMPT_INJECTION_PAYLOAD", armor_in.reason, err)
+
         for bad in self.blocked_substrings:
             if bad in normalized_payload:
                 msg = f"Blocked prompt injection payload matching '{bad}' (after NFKD/Base64/URL normalization)."
