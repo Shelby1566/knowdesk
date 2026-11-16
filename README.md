@@ -6,24 +6,35 @@ KnowDesk is a tool-augmented customer support agent harness evaluated on **Sierr
 
 ```mermaid
 flowchart TD
-    User([Customer / FastAPI SSE Stream]) --> Router[M8 Multi-Label Product Line Router]
-    Router --> AgentNode[LangGraph agent_node / PlainAgentLoop]
-    AgentNode -->|Watermark Context Compaction M13| LLM[[DeepSeek-V4.1-Flash / Qwen3.8-Flash]]
-    AgentNode -->|KB_search| Retriever[(KnowDesk Hybrid Retriever<br/>H2 Breadcrumb + BM25 Inverted Index + Qwen3-Emb + RRF)]
-    Retriever -->|M14 Bounded Re-Retrieval & M15 Sub-Agent Isolation| AgentNode
-    AgentNode -->|Parallel Tool Calls Queue| Guard{M12 YAML Guard Engine<br/>NFKD/Base64 Defense-in-Depth}
-    Guard -- Blocked R01-R04 --> SelfCorrect[Structured Error Feedback -> In-Turn Self-Correction]
-    SelfCorrect --> AgentNode
-    Guard -- High-Risk Write --> Confirm[M10 Isolated human_confirm Node<br/>Zero-Side-Effect interrupt]
-    Confirm -- Approve / Modify Args --> Exec[M11 ReliableToolExecutor<br/>SHA-256 Idempotency + Full-Jitter Retry]
-    Confirm -- Reject --> SelfCorrect
-    Guard -- Read-Only / Allowed --> Exec
-    Exec -->|Service Mode| MCP[M27/M36 MCP v2 Client -> MCPServer]
-    Exec -->|Benchmark Mode| TauEnv[Sierra tau2-bench Environment Replay]
-    Exec --> OTel[M17 OpenTelemetry GenAI Spans + PII Redaction]
+    User([Customer / FastAPI SSE Stream / gRPC]) --> Prefetch[Speculative Prefetch Engine<br/>Async TTFT Zero-Wait Cache]
+    User --> Triage[Triage Router Agent]
+    
+    Triage -->|Policy / FAQ| PolicyAgent[Policy Specialist Agent<br/>Read-Only ACL Sandbox]
+    Triage -->|Transactions| ActionAgent[Action Specialist Agent<br/>Dynamic Schema Validation]
+    
+    PolicyAgent --> Retriever[(KnowDesk Hybrid Retriever<br/>AdaRRF + Small-to-Big + HNSW)]
+    PolicyAgent --> GraphRAG[(GraphRAG Policy Ontology<br/>Deterministic Constraint Solver)]
+    
+    ActionAgent --> Auditor{Auditor Supervisor Agent<br/>Identity Gate + Risk Limits}
+    Auditor -- Over Limit / High Risk --> HITL[human_confirm HITL Node<br/>Zero-Side-Effect Interrupt]
+    Auditor -- Rejected / Unverified --> Blocked[Compliance Rejection]
+    Auditor -- Approved --> Exec[Reliable Tool Executor<br/>SHA-256 Idempotency + Full Jitter]
+    HITL -- Approved --> Exec
+    
+    Prefetch -.->|Instant Cache Hit| Exec
+    Prefetch -.->|Instant Cache Hit| PolicyAgent
+    
+    Exec --> OTel[OpenTelemetry Spans + DLP Vault]
+    Exec --> Trace[(Trajectory & Failure Logs)]
+    Trace --> Reflection[Self-Reflection Memory & DPO Pipeline]
+    Reflection -.->|Dynamic Few-Shot Injection| Triage
 ```
 
 ## Key Architecture & Features
+- **GraphRAG Deterministic Policy Constraint Engine (`kb/graph.py`)**: NetworkX directed policy ontology graph modeling products, fee structures, waiver conditions, and hard disqualifiers (e.g. 12-month late payment penalty). Evaluates deterministic boolean proofs to supersede heuristic vector retrieval and prevent policy hallucination.
+- **Speculative Tool Execution & Prefetch Engine (`service/prefetch.py`)**: Asynchronous background pre-fetching of read-only card profiles, transaction records, and policy context during the 800ms–2000ms LLM time-to-first-token (TTFT) window. Features sub-2ms heuristic intent parsing, in-memory TTL caching, and zero side effects (mutating tools strictly quarantined).
+- **Hierarchical Multi-Agent Swarm (`agent/swarm.py`)**: Enterprise multi-agent federation: `TriageAgent` (sub-millisecond intent routing) -> `PolicySpecialistAgent` (sandboxed read-only RAG) -> `ActionSpecialistAgent` (transaction proposal assembly) -> `AuditorAgent` (independent compliance supervisor enforcing verification gates and human-in-the-loop interrupts for high-value actions).
+- **Self-Reflection Memory & Trajectory-to-DPO Pipeline (`agent/reflection.py`)**: Closes the loop from failure attribution to runtime zero-defect execution. Indexes M20 failure attributions into structured reflection cards, dynamically injects relevant few-shot guidance, and automatically exports paired `(prompt, chosen, rejected)` triplets to `eval/data/dpo_preference_dataset.jsonl` for offline DPO preference alignment.
 - **Enterprise Zero-Trust & Multi-Tenant ACL RAG (`kb/acl.py`, `kb/hybrid_retriever.py`)**: Row-level document and chunk access control context filtering based on tenant isolation, user clearance levels (Customer vs. Frontline Agent vs. Supervisor), and role whitelists, preventing unauthorized cross-tenant data leakage.
 - **Enterprise Reversible PII Tokenization Vault (`security/dlp.py`)**: Google Cloud DLP / Sensitive Data Protection pattern replacing raw 16-digit cards, SSNs, phone numbers, and street addresses with cryptographic tokens (`[TOKEN_CARD_...]`) before prompting LLMs, with selective detokenization at secure banking backend execution boundaries.
 - **Bidirectional Vertex Model Armor (`agent/model_armor.py`, `agent/guard.py`)**: Real-time input shield detecting multilingual jailbreaks (Spanish, Chinese, Russian) and persona hijacks, combined with output shield blocking raw payment leaks, prohibited financial promises, and Markdown exfiltration.
