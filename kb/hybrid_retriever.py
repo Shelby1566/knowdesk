@@ -4,7 +4,7 @@ from agent.subagent import RetrievalSubAgent
 from kb.bm25 import BM25Index
 from kb.chunk import Chunk, chunk_corpus
 from kb.dense import DenseRetriever
-from kb.fusion import rrf_fusion
+from kb.fusion import adaptive_rrf_fusion, rrf_fusion
 from kb.loader import load_documents
 from kb.router import apply_intent_boost, map_doc_to_product_line, predict_product_lines_keyword
 from kb.tokenize import tokenize
@@ -35,20 +35,21 @@ class KnowDeskHybridRetriever:
         self.bm25 = BM25Index.build(chunk_ids, chunk_texts, tokenize_fn=tokenize)
         self.dense = DenseRetriever.build_or_load("Qwen/Qwen3-Embedding-0.6B", chunk_ids, chunk_texts)
 
-    def search_chunks(self, query: str, k: int = 10) -> list[tuple[Chunk, float]]:
-        """返回命中的子块 (Child Chunks) 及其 RRF 分数"""
+    def search_chunks(self, query: str, k: int = 10, fusion_mode: str = "adaptive_rrf") -> list[tuple[Chunk, float]]:
+        """返回命中的子块 (Child Chunks) 及其 RRF / AdaRRF 分数"""
         b_res = self.bm25.search(query, k=50)
         q_vec = self.dense.encode_query(query)
         d_res = self.dense.store.search(q_vec, k=50)
-        fused = rrf_fusion([b_res, d_res], k=k, rrf_k=60)
+        fuse_fn = adaptive_rrf_fusion if fusion_mode == "adaptive_rrf" else rrf_fusion
+        fused = fuse_fn([b_res, d_res], k=k, rrf_k=60)
         return [(self.chunk_map[cid], sc) for cid, sc in fused if cid in self.chunk_map]
 
-    def search_parent_sections(self, query: str, k: int = 10) -> list[dict[str, Any]]:
+    def search_parent_sections(self, query: str, k: int = 10, fusion_mode: str = "adaptive_rrf") -> list[dict[str, Any]]:
         """
         Parent-Document Retrieval (Small-to-Big):
         先通过细粒度子块精确匹配，再回拉所属 H2 完整章节与父文档标题，兼顾匹配精度与上下文完整性。
         """
-        matched_chunks = self.search_chunks(query, k=k * 3)
+        matched_chunks = self.search_chunks(query, k=k * 3, fusion_mode=fusion_mode)
         seen_docs: set[str] = set()
         results: list[dict[str, Any]] = []
         for ch, sc in matched_chunks:
@@ -69,10 +70,11 @@ class KnowDeskHybridRetriever:
                 break
         return results
 
-    def search(self, query: str, k: int = 10) -> list[dict[str, Any]]:
+    def search(self, query: str, k: int = 10, fusion_mode: str = "adaptive_rrf") -> list[dict[str, Any]]:
         bm25_res = self.bm25.search_docs(query, self.chunk_to_doc, k=50)
         dense_res = self.dense.search_docs(query, self.chunk_to_doc, k=50)
-        rrf_res = rrf_fusion([bm25_res, dense_res], k=50, rrf_k=60)
+        fuse_fn = adaptive_rrf_fusion if fusion_mode == "adaptive_rrf" else rrf_fusion
+        rrf_res = fuse_fn([bm25_res, dense_res], k=50, rrf_k=60)
         pred_lines = predict_product_lines_keyword(query)
         boosted = apply_intent_boost(rrf_res, self.doc_to_line, pred_lines, beta=0.15, k=k)
 

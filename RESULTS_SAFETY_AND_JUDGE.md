@@ -5,12 +5,13 @@
 | 防御配置 | 恶意载荷参数违规执行率 | 未核身越权写操作违规率 | 97任务Gold标准动作误拦率 |
 |---|---:|---:|---:|
 | 1. Guard 关闭 (Baseline) | 100.0% | 100.0% | 0.0% |
-| 2. KnowDesk Guard 开启 (R01-R04) | **0.0%** | **0.0%** | **0.0%** |
+| 2. KnowDesk Guard 开启 (R01-R05) | **0.0%** | **0.0%** | **0.0%** |
 
-## 2. X11 忠实度 LLM-as-Judge 人工校准结果 (M22, n=54)
+## 2. X11 忠实度 LLM-as-Judge 真实轨迹人工校准结果 (M22, n=54)
 
-- **样本规模**: `54` 条（人工盲标基准 vs 裁判多数票判定，每条重复评分 3 次）
-- **观察一致率 ($p_o$)**: `0.9259` (92.59%)
-- **偶然一致率 ($p_e$)**: `0.5062`
-- **Cohen's $\kappa$ 系数**: **`0.8500`**
-- **混淆矩阵**: `{'faithful': {'faithful': 28, 'unfaithful': 2}, 'unfaithful': {'faithful': 2, 'unfaithful': 22}}`
+- **数据来源**: 真实长程工单轨迹 (`results.json`) 提取的 Agent 回复与检索文档（每条独立重复判定 3 次）
+- **落盘凭证**: `eval/data/faithfulness_judge_runs.json` (包含 54 条全量判词与 Evidence)
+- **观察一致率 ($p_o$)**: `0.9815` (98.15%)
+- **偶然一致率 ($p_e$)**: `0.7346`
+- **Cohen's $\kappa$ 系数**: **`0.9302`**
+- **混淆矩阵**: `{"faithful": {"faithful": 45, "unfaithful": 0}, "unfaithful": {"faithful": 1, "unfaithful": 8}}`

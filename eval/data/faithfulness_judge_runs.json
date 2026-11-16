@@ -1,0 +1,830 @@
+{
+  "metrics": {
+    "n": 54,
+    "p_o": 0.9814814814814815,
+    "p_e": 0.7345679012345679,
+    "kappa": 0.930232558139535,
+    "confusion_matrix": {
+      "faithful": {
+        "faithful": 45,
+        "unfaithful": 0
+      },
+      "unfaithful": {
+        "faithful": 1,
+        "unfaithful": 8
+      }
+    }
+  },
+  "runs": [
+    {
+      "task_id": "task_031",
+      "human_label": "faithful",
+      "majority_verdict": "faithful",
+      "unanimous": true,
+      "verdicts": [
+        "faithful",
+        "faithful",
+        "faithful"
+      ],
+      "evidence": "Aligned with document clauses (25404 chars).",
+      "reason": "Factual claims strictly ground in retrieved context.",
+      "doc_snippet": "1. Filing a Credit Card Transaction Dispute (Internal)\n   ID: doc_credit_cards_credit_cards_(general)_014\n   Score: 0.0377\n   Content: ## Process Summary\nWhen a customer needs to file a formal dispute",
+      "reply_snippet": "I can file this dispute for you. Because it involves your account and transaction details, I first need to verify your identity.\n\nPlease provide:\n- Your full name (exactly as on the account), and\n- An"
+    },
+    {
+      "task_id": "task_031",
+      "human_label": "faithful",
+      "majority_verdict": "faithful",
+      "unanimous": true,
+      "verdicts": [
+        "faithful",
+        "faithful",
+        "faithful"
+      ],
+      "evidence": "Aligned with document clauses (24458 chars).",
+      "reason": "Factual claims strictly ground in retrieved context.",
+      "doc_snippet": "1. How to Find Your Rho-Bank Credit Card Numbers Online\n   ID: doc_credit_cards_credit_cards_(general)_013\n   Score: 0.0377\n   Content: ## Retrieve the Last 4 Digits Using the Discovered Tool\n\nDiscove",
+      "reply_snippet": "Yes. I can provide a lookup tool for your Silver Rewards Card account."
+    },
+    {
+      "task_id": "task_015",
+      "human_label": "faithful",
+      "majority_verdict": "faithful",
+      "unanimous": true,
+      "verdicts": [
+        "faithful",
+        "faithful",
+        "faithful"
+      ],
+      "evidence": "Aligned with document clauses (11841 chars).",
+      "reason": "Factual claims strictly ground in retrieved context.",
+      "doc_snippet": "1. Silver Rewards Card: Referral Program - Earn Rewards for Referring Friends\n   ID: doc_credit_cards_silver_rewards_card_011\n   Score: 0.0371\n   Content: ## What You Earn\n- Receive 75 for each succes",
+      "reply_snippet": "Let me check the specific card program."
+    },
+    {
+      "task_id": "task_015",
+      "human_label": "faithful",
+      "majority_verdict": "faithful",
+      "unanimous": true,
+      "verdicts": [
+        "faithful",
+        "faithful",
+        "faithful"
+      ],
+      "evidence": "Aligned with document clauses (12929 chars).",
+      "reason": "Factual claims strictly ground in retrieved context.",
+      "doc_snippet": "1. Crypto-Cash Back: FAQ-2\n   ID: doc_credit_cards_crypto-cash_back_009\n   Score: 0.0374\n   Content: ## Eligibility\n- What is the minimum credit score to apply for the card to earn crypto rewards? $66",
+      "reply_snippet": "Let me verify whether this card has an active referral program."
+    },
+    {
+      "task_id": "task_015",
+      "human_label": "faithful",
+      "majority_verdict": "faithful",
+      "unanimous": true,
+      "verdicts": [
+        "faithful",
+        "faithful",
+        "faithful"
+      ],
+      "evidence": "Aligned with document clauses (12024 chars).",
+      "reason": "Factual claims strictly ground in retrieved context.",
+      "doc_snippet": "1. Silver Rewards Card: Referral Program - Earn Rewards for Referring Friends\n   ID: doc_credit_cards_silver_rewards_card_011\n   Score: 0.0354\n   Content: ## What You Earn\n- Receive 75 for each succes",
+      "reply_snippet": "Let me check guidance on mailed offers."
+    },
+    {
+      "task_id": "task_015",
+      "human_label": "faithful",
+      "majority_verdict": "faithful",
+      "unanimous": true,
+      "verdicts": [
+        "faithful",
+        "faithful",
+        "faithful"
+      ],
+      "evidence": "Aligned with document clauses (13112 chars).",
+      "reason": "Factual claims strictly ground in retrieved context.",
+      "doc_snippet": "1. Generating a Credit Card Referral Link (Internal)\n   ID: doc_credit_cards_credit_cards_(general)_009\n   Score: 0.0377\n   Content: ## Pre-check before providing the referral tool\n- Search the knowle",
+      "reply_snippet": "I checked the current referral offers available to us, and I can’t provide a referral link for this one.\n\nThe reason: there is **no documented active referral program for the Crypto-Cash Back card** i"
+    },
+    {
+      "task_id": "task_015",
+      "human_label": "faithful",
+      "majority_verdict": "faithful",
+      "unanimous": true,
+      "verdicts": [
+        "faithful",
+        "faithful",
+        "faithful"
+      ],
+      "evidence": "Aligned with document clauses (11426 chars).",
+      "reason": "Factual claims strictly ground in retrieved context.",
+      "doc_snippet": "1. Business Gold Rewards Card: Referral Program - Earn Rewards for Referring Businesses\n   ID: doc_business_credit_cards_business_gold_rewards_card_010\n   Score: 0.0377\n   Content: ## How the Referral",
+      "reply_snippet": "Those terms are accurate, but unfortunately the offer has expired.\n\nThe **Business Gold Rewards Card** referral program stopped accepting new referrals on **September 15, 2025**. Since today is Novemb"
+    },
+    {
+      "task_id": "task_015",
+      "human_label": "faithful",
+      "majority_verdict": "faithful",
+      "unanimous": true,
+      "verdicts": [
+        "faithful",
+        "faithful",
+        "faithful"
+      ],
+      "evidence": "Aligned with document clauses (11252 chars).",
+      "reason": "Factual claims strictly ground in retrieved context.",
+      "doc_snippet": "1. EcoCard: Referral Program - Earn Rewards for Referring Friends\n   ID: doc_credit_cards_ecocard_011\n   Score: 0.0377\n   Content: ## What You Earn\n- Receive 50 for each successful referral\n- You can ",
+      "reply_snippet": "The EcoCard referral program is available, but the bonus amount you saw is incorrect.\n\nThe official offer is:\n\n- **$50**, not $200, for each successful referral\n- The referred person must be approved "
+    },
+    {
+      "task_id": "task_015",
+      "human_label": "faithful",
+      "majority_verdict": "faithful",
+      "unanimous": true,
+      "verdicts": [
+        "faithful",
+        "faithful",
+        "faithful"
+      ],
+      "evidence": "Aligned with document clauses (11219 chars).",
+      "reason": "Factual claims strictly ground in retrieved context.",
+      "doc_snippet": "1. Business Silver Rewards Card: Referral Program - Earn Rewards for Referring Businesses\n   ID: doc_business_credit_cards_business_silver_rewards_card_013\n   Score: 0.0377\n   Content: ## What you can",
+      "reply_snippet": "No—the Silver Zoom offer isn’t available, and the terms you saw don’t match it.\n\nThe official **Silver Zoom Card** referral program:\n\n- Paid **$150**, not $100\n- Required the referred logistics busine"
+    },
+    {
+      "task_id": "task_015",
+      "human_label": "faithful",
+      "majority_verdict": "faithful",
+      "unanimous": true,
+      "verdicts": [
+        "faithful",
+        "faithful",
+        "faithful"
+      ],
+      "evidence": "Aligned with document clauses (11802 chars).",
+      "reason": "Factual claims strictly ground in retrieved context.",
+      "doc_snippet": "1. Platinum Rewards Card: Referral Program - Earn Rewards for Referring Friends\n   ID: doc_credit_cards_platinum_rewards_card_008\n   Score: 0.0377\n   Content: ## How It Works\n- Share your referral thr",
+      "reply_snippet": "Yes, that offer is active and the terms you stated are correct.\n\nFor the **Platinum Rewards Card**:\n\n- You earn **$100 per successful referral**\n- The referred friend must be approved and spend at lea"
+    },
+    {
+      "task_id": "task_002",
+      "human_label": "faithful",
+      "majority_verdict": "faithful",
+      "unanimous": true,
+      "verdicts": [
+        "faithful",
+        "faithful",
+        "faithful"
+      ],
+      "evidence": "Aligned with document clauses (10760 chars).",
+      "reason": "Factual claims strictly ground in retrieved context.",
+      "doc_snippet": "1. Bronze Rewards Card: Understanding Your 1% Cash Back Rewards\n   ID: doc_credit_cards_bronze_rewards_card_002\n   Score: 0.0357\n   Content: ## What You Earn on Each Purchase\n- You earn 1.0% cash back",
+      "reply_snippet": "Let me check the full details on our top cash back cards."
+    },
+    {
+      "task_id": "task_002",
+      "human_label": "faithful",
+      "majority_verdict": "faithful",
+      "unanimous": true,
+      "verdicts": [
+        "faithful",
+        "faithful",
+        "faithful"
+      ],
+      "evidence": "Aligned with document clauses (16916 chars).",
+      "reason": "Factual claims strictly ground in retrieved context.",
+      "doc_snippet": "1. Business Gold Rewards Card: Premium Business Credit Card Overview\n   ID: doc_business_credit_cards_business_gold_rewards_card_001\n   Score: 0.0365\n   Content: ## Eligibility\n- Minimum personal cred",
+      "reply_snippet": "Great news — for everyday purchases, our highest flat cash back rate is on the **Platinum Rewards Card**.\n\n### Platinum Rewards Card\n- **10% cash back** on all eligible purchases (point-of-sale and on"
+    },
+    {
+      "task_id": "task_002",
+      "human_label": "faithful",
+      "majority_verdict": "faithful",
+      "unanimous": true,
+      "verdicts": [
+        "faithful",
+        "faithful",
+        "faithful"
+      ],
+      "evidence": "Aligned with document clauses (13759 chars).",
+      "reason": "Factual claims strictly ground in retrieved context.",
+      "doc_snippet": "1. Platinum Rewards Card: Rebate Eligibility and Calcluation\n   ID: doc_credit_cards_platinum_rewards_card_010\n   Score: 0.0377\n   Content: ## Eligibility for the Annual Fee Rebate\n\n- The Platinum Rew",
+      "reply_snippet": "Here's the full picture on the rebate — and good news given your spending level.\n\n### The Numbers\n- **Rebate amount:** $150 per year (applied as a statement credit)\n- **Monthly spending threshold:** $"
+    },
+    {
+      "task_id": "task_002",
+      "human_label": "faithful",
+      "majority_verdict": "faithful",
+      "unanimous": true,
+      "verdicts": [
+        "faithful",
+        "faithful",
+        "faithful"
+      ],
+      "evidence": "Aligned with document clauses (15745 chars).",
+      "reason": "Factual claims strictly ground in retrieved context.",
+      "doc_snippet": "1. Platinum Rewards Card: Elite Business Credit Card Application\n   ID: doc_business_credit_cards_business_platinum_rewards_card_001\n   Score: 0.0374\n   Content: ## Eligibility and Credit Standards\n- ",
+      "reply_snippet": "Let me check for the application tool to hand you."
+    },
+    {
+      "task_id": "task_002",
+      "human_label": "faithful",
+      "majority_verdict": "faithful",
+      "unanimous": true,
+      "verdicts": [
+        "faithful",
+        "faithful",
+        "faithful"
+      ],
+      "evidence": "Aligned with document clauses (16468 chars).",
+      "reason": "Factual claims strictly ground in retrieved context.",
+      "doc_snippet": "1. Platinum Rewards Card: Elite Business Credit Card Application\n   ID: doc_business_credit_cards_business_platinum_rewards_card_001\n   Score: 0.0362\n   Content: ## Eligibility and Credit Standards\n- ",
+      "reply_snippet": "None of those turned up a specific application tool. Let me search more precisely."
+    },
+    {
+      "task_id": "task_002",
+      "human_label": "faithful",
+      "majority_verdict": "faithful",
+      "unanimous": true,
+      "verdicts": [
+        "faithful",
+        "faithful",
+        "faithful"
+      ],
+      "evidence": "Aligned with document clauses (20829 chars).",
+      "reason": "Factual claims strictly ground in retrieved context.",
+      "doc_snippet": "1. (Internal) Applying a Credit Card Statement Credit\n   ID: doc_credit_cards_credit_cards_(general)_017\n   Score: 0.0377\n   Content: ## Purpose\n\nWhen an agent needs to apply a statement credit to a c",
+      "reply_snippet": "Let me check for a navigation tool to get you to the application."
+    },
+    {
+      "task_id": "task_002",
+      "human_label": "faithful",
+      "majority_verdict": "faithful",
+      "unanimous": true,
+      "verdicts": [
+        "faithful",
+        "faithful",
+        "faithful"
+      ],
+      "evidence": "Aligned with document clauses (19599 chars).",
+      "reason": "Factual claims strictly ground in retrieved context.",
+      "doc_snippet": "1. Green Rewards Card: Apply for a Sustainable Business Credit Card\n   ID: doc_business_credit_cards_green_rewards_card_001\n   Score: 0.0362\n   Content: ## Eligibility\n- Personal credit: You should me",
+      "reply_snippet": "You're all set to apply — the application is something you'll complete yourself in your Rho-Bank online dashboard, and I wasn't able to find a direct tool to launch it for you, so here's exactly how t"
+    },
+    {
+      "task_id": "task_027",
+      "human_label": "faithful",
+      "majority_verdict": "faithful",
+      "unanimous": true,
+      "verdicts": [
+        "faithful",
+        "faithful",
+        "faithful"
+      ],
+      "evidence": "Aligned with document clauses (12380 chars).",
+      "reason": "Factual claims strictly ground in retrieved context.",
+      "doc_snippet": "1. Business Silver Rewards Card: How to Earn 10% Back on Travel and Software Purchases\n   ID: doc_business_credit_cards_business_silver_rewards_card_002\n   Score: 0.0377\n   Content: ## Earning rates\n-",
+      "reply_snippet": "I found the relevant earning rules and a promotional rule. I’ll check exclusions and reward-calculation details before determining whether anything is incorrect."
+    },
+    {
+      "task_id": "task_027",
+      "human_label": "faithful",
+      "majority_verdict": "faithful",
+      "unanimous": true,
+      "verdicts": [
+        "faithful",
+        "faithful",
+        "faithful"
+      ],
+      "evidence": "Aligned with document clauses (10371 chars).",
+      "reason": "Factual claims strictly ground in retrieved context.",
+      "doc_snippet": "1. Business Silver Rewards Card: Maximizing Rewards on Business Travel and Tech Expenses\n   ID: doc_business_credit_cards_business_silver_rewards_card_010\n   Score: 0.0371\n   Content: ## Concentrate s",
+      "reply_snippet": "I need to calculate expected versus actual rewards precisely, including promo period. Let me search for more details on how the double cash back promo interacts with exclusions and exact calculation e"
+    },
+    {
+      "task_id": "task_027",
+      "human_label": "faithful",
+      "majority_verdict": "faithful",
+      "unanimous": true,
+      "verdicts": [
+        "faithful",
+        "faithful",
+        "faithful"
+      ],
+      "evidence": "Aligned with document clauses (10038 chars).",
+      "reason": "Factual claims strictly ground in retrieved context.",
+      "doc_snippet": "1. Business Silver Rewards Card: Double Cash Back Promo\n   ID: doc_business_credit_cards_business_silver_rewards_card_012\n   Score: 0.0377\n   Content: ## Limited-time offer: double your cash back\nNew ",
+      "reply_snippet": "I found several apparent discrepancies. I’ll check the rewards-review procedure and available internal tools before taking action."
+    },
+    {
+      "task_id": "task_027",
+      "human_label": "faithful",
+      "majority_verdict": "faithful",
+      "unanimous": true,
+      "verdicts": [
+        "faithful",
+        "faithful",
+        "faithful"
+      ],
+      "evidence": "Aligned with document clauses (12553 chars).",
+      "reason": "Factual claims strictly ground in retrieved context.",
+      "doc_snippet": "1. Applying Resolved Cash Back Dispute Corrections (Internal)\n   ID: doc_credit_cards_credit_cards_(general)_004\n   Score: 0.0374\n   Content: ## Overview\nAfter a cash back dispute is resolved and appr",
+      "reply_snippet": "I need to search for the dispute filing process and tools."
+    },
+    {
+      "task_id": "task_027",
+      "human_label": "faithful",
+      "majority_verdict": "faithful",
+      "unanimous": true,
+      "verdicts": [
+        "faithful",
+        "faithful",
+        "faithful"
+      ],
+      "evidence": "Aligned with document clauses (24869 chars).",
+      "reason": "Factual claims strictly ground in retrieved context.",
+      "doc_snippet": "1. Applying Resolved Cash Back Dispute Corrections (Internal)\n   ID: doc_credit_cards_credit_cards_(general)_004\n   Score: 0.0374\n   Content: ## Overview\nAfter a cash back dispute is resolved and appr",
+      "reply_snippet": "I’ll check the standard personal-card rates and rounding rules to complete the audit."
+    },
+    {
+      "task_id": "task_027",
+      "human_label": "faithful",
+      "majority_verdict": "faithful",
+      "unanimous": true,
+      "verdicts": [
+        "faithful",
+        "faithful",
+        "faithful"
+      ],
+      "evidence": "Aligned with document clauses (10905 chars).",
+      "reason": "Factual claims strictly ground in retrieved context.",
+      "doc_snippet": "1. Credit Card Rewards Points Rounding Policy\n   ID: doc_credit_cards_credit_cards_(general)_007\n   Score: 0.0374\n   Content: ## Rounding policy\nAll credit card rewards points are rounded down to the ",
+      "reply_snippet": "I found multiple transactions that appear under-credited. I’ll provide the secure rewards-dispute tool for each affected transaction so you can submit them for review."
+    },
+    {
+      "task_id": "task_027",
+      "human_label": "faithful",
+      "majority_verdict": "faithful",
+      "unanimous": true,
+      "verdicts": [
+        "faithful",
+        "faithful",
+        "faithful"
+      ],
+      "evidence": "Aligned with document clauses (15482 chars).",
+      "reason": "Factual claims strictly ground in retrieved context.",
+      "doc_snippet": "1. Credit Card Rewards Points Rounding Policy\n   ID: doc_credit_cards_credit_cards_(general)_007\n   Score: 0.0377\n   Content: ## Rounding policy\nAll credit card rewards points are rounded down to the ",
+      "reply_snippet": "I found multiple transactions that appear under-credited. I’ll provide the secure rewards-dispute tool for each affected transaction so you can submit them for review."
+    },
+    {
+      "task_id": "task_027",
+      "human_label": "faithful",
+      "majority_verdict": "faithful",
+      "unanimous": true,
+      "verdicts": [
+        "faithful",
+        "faithful",
+        "faithful"
+      ],
+      "evidence": "Aligned with document clauses (10150 chars).",
+      "reason": "Factual claims strictly ground in retrieved context.",
+      "doc_snippet": "1. Business Silver Rewards Card: Double Cash Back Promo\n   ID: doc_business_credit_cards_business_silver_rewards_card_012\n   Score: 0.0377\n   Content: ## Limited-time offer: double your cash back\nNew ",
+      "reply_snippet": "I found multiple transactions that appear under-credited. I’ll provide the secure rewards-dispute tool for each affected transaction so you can submit them for review."
+    },
+    {
+      "task_id": "task_016",
+      "human_label": "faithful",
+      "majority_verdict": "faithful",
+      "unanimous": true,
+      "verdicts": [
+        "faithful",
+        "faithful",
+        "faithful"
+      ],
+      "evidence": "Aligned with document clauses (12532 chars).",
+      "reason": "Factual claims strictly ground in retrieved context.",
+      "doc_snippet": "1. Platinum Rewards Card: Referral Program - Earn Rewards for Referring Friends\n   ID: doc_credit_cards_platinum_rewards_card_008\n   Score: 0.0365\n   Content: ## How It Works\n- Share your referral thr",
+      "reply_snippet": "I can check your referral status and determine whether the required conditions have been met. To access that account-specific information, please provide:\n\n- Your full name or user ID\n- Any **two** of"
+    },
+    {
+      "task_id": "task_016",
+      "human_label": "faithful",
+      "majority_verdict": "faithful",
+      "unanimous": true,
+      "verdicts": [
+        "faithful",
+        "faithful",
+        "faithful"
+      ],
+      "evidence": "Aligned with document clauses (11426 chars).",
+      "reason": "Factual claims strictly ground in retrieved context.",
+      "doc_snippet": "1. Business Gold Rewards Card: Referral Program - Earn Rewards for Referring Businesses\n   ID: doc_business_credit_cards_business_gold_rewards_card_010\n   Score: 0.0371\n   Content: ## How the Referral",
+      "reply_snippet": "I need the exact terms for the personal Bronze and Gold cards, so I’ll search those separately."
+    },
+    {
+      "task_id": "task_016",
+      "human_label": "faithful",
+      "majority_verdict": "faithful",
+      "unanimous": true,
+      "verdicts": [
+        "faithful",
+        "faithful",
+        "faithful"
+      ],
+      "evidence": "Aligned with document clauses (12819 chars).",
+      "reason": "Factual claims strictly ground in retrieved context.",
+      "doc_snippet": "1. Platinum Rewards Card: Referral Program - Earn Rewards for Referring Friends\n   ID: doc_credit_cards_platinum_rewards_card_008\n   Score: 0.0371\n   Content: ## How It Works\n- Share your referral thr",
+      "reply_snippet": "The records show:\n\n- **Bronze Rewards Card — completed 11/11/2025**\n- **Silver Rewards Card — in progress, started 11/13/2025**\n- **Gold Rewards Card — completed 11/04/2025**\n- **Platinum Rewards Card"
+    },
+    {
+      "task_id": "task_016",
+      "human_label": "faithful",
+      "majority_verdict": "faithful",
+      "unanimous": true,
+      "verdicts": [
+        "faithful",
+        "faithful",
+        "faithful"
+      ],
+      "evidence": "Aligned with document clauses (12819 chars).",
+      "reason": "Factual claims strictly ground in retrieved context.",
+      "doc_snippet": "1. Business Gold Rewards Card: Referral Program - Earn Rewards for Referring Businesses\n   ID: doc_business_credit_cards_business_gold_rewards_card_010\n   Score: 0.0374\n   Content: ## How the Referral",
+      "reply_snippet": "The records show:\n\n- **Bronze Rewards Card — completed 11/11/2025**\n- **Silver Rewards Card — in progress, started 11/13/2025**\n- **Gold Rewards Card — completed 11/04/2025**\n- **Platinum Rewards Card"
+    },
+    {
+      "task_id": "task_016",
+      "human_label": "faithful",
+      "majority_verdict": "faithful",
+      "unanimous": true,
+      "verdicts": [
+        "faithful",
+        "faithful",
+        "faithful"
+      ],
+      "evidence": "Aligned with document clauses (12119 chars).",
+      "reason": "Factual claims strictly ground in retrieved context.",
+      "doc_snippet": "1. Business Bronze Rewards Card: Referral Program - Earn Rewards for Referring Businesses\n   ID: doc_business_credit_cards_business_bronze_rewards_card_011\n   Score: 0.0374\n   Content: ## What You Can",
+      "reply_snippet": "The status explanation confirms that **IN_PROGRESS** means your friend has opened the account but has not yet completed all bonus criteria. I’ll check whether their transactions have reached the requi"
+    },
+    {
+      "task_id": "task_033",
+      "human_label": "faithful",
+      "majority_verdict": "faithful",
+      "unanimous": true,
+      "verdicts": [
+        "faithful",
+        "faithful",
+        "faithful"
+      ],
+      "evidence": "Aligned with document clauses (21301 chars).",
+      "reason": "Factual claims strictly ground in retrieved context.",
+      "doc_snippet": "1. Diamond Elite Card: Premium Credit Limits and Account Management\n   ID: doc_credit_cards_diamond_elite_card_005\n   Score: 0.0374\n   Content: ## Your credit limits\n- Standard range: $37,500 to $375,",
+      "reply_snippet": "I found relevant information. Let me check the current date to determine whether a specific incident protocol applies."
+    },
+    {
+      "task_id": "task_026",
+      "human_label": "faithful",
+      "majority_verdict": "faithful",
+      "unanimous": true,
+      "verdicts": [
+        "faithful",
+        "faithful",
+        "faithful"
+      ],
+      "evidence": "Aligned with document clauses (10708 chars).",
+      "reason": "Factual claims strictly ground in retrieved context.",
+      "doc_snippet": "1. Internal: Credit Card Rewards - Points vs Cash Back Representation\n   ID: doc_credit_cards_credit_cards_(general)_006\n   Score: 0.0374\n   Content: ## Rewards representation\nDue to a legacy backend ",
+      "reply_snippet": "I found the transaction data and confirmed there is a legacy “points” display for cash back. I need one more policy check to identify the Silver card’s exact bonus categories and any exclusions before"
+    },
+    {
+      "task_id": "task_026",
+      "human_label": "faithful",
+      "majority_verdict": "faithful",
+      "unanimous": true,
+      "verdicts": [
+        "faithful",
+        "faithful",
+        "faithful"
+      ],
+      "evidence": "Aligned with document clauses (11305 chars).",
+      "reason": "Factual claims strictly ground in retrieved context.",
+      "doc_snippet": "1. Internal: Credit Card Rewards - Points vs Cash Back Representation\n   ID: doc_credit_cards_credit_cards_(general)_006\n   Score: 0.0371\n   Content: ## Rewards representation\nDue to a legacy backend ",
+      "reply_snippet": "I found the transaction data and confirmed there is a legacy “points” display for cash back. I need one more policy check to identify the Silver card’s exact bonus categories and any exclusions before"
+    },
+    {
+      "task_id": "task_026",
+      "human_label": "faithful",
+      "majority_verdict": "faithful",
+      "unanimous": true,
+      "verdicts": [
+        "faithful",
+        "faithful",
+        "faithful"
+      ],
+      "evidence": "Aligned with document clauses (12115 chars).",
+      "reason": "Factual claims strictly ground in retrieved context.",
+      "doc_snippet": "1. Credit Card Rewards Categories\n   ID: doc_credit_cards_credit_cards_(general)_005\n   Score: 0.0368\n   Content: ## Eligible rewards categories\nThe following are the valid transaction categories that",
+      "reply_snippet": "I’ve identified the relevant rates and exclusions. I’m using a rewards-calculation tool to reconcile all 26 transactions precisely, including promotional periods and merchant-specific exceptions."
+    },
+    {
+      "task_id": "task_026",
+      "human_label": "faithful",
+      "majority_verdict": "faithful",
+      "unanimous": true,
+      "verdicts": [
+        "faithful",
+        "faithful",
+        "faithful"
+      ],
+      "evidence": "Aligned with document clauses (12621 chars).",
+      "reason": "Factual claims strictly ground in retrieved context.",
+      "doc_snippet": "1. Applying Resolved Cash Back Dispute Corrections (Internal)\n   ID: doc_credit_cards_credit_cards_(general)_004\n   Score: 0.0377\n   Content: ## Overview\nAfter a cash back dispute is resolved and appr",
+      "reply_snippet": "The policy requires a customer-initiated dispute for each transaction with a confirmed discrepancy. I’ve completed the manual reconciliation and found several likely mismatches; I’ll now provide you w"
+    },
+    {
+      "task_id": "task_035",
+      "human_label": "faithful",
+      "majority_verdict": "faithful",
+      "unanimous": true,
+      "verdicts": [
+        "faithful",
+        "faithful",
+        "faithful"
+      ],
+      "evidence": "Aligned with document clauses (33721 chars).",
+      "reason": "Factual claims strictly ground in retrieved context.",
+      "doc_snippet": "1. Internal: Backend Incident 11/14 - Erroneous Credit Bureau Reporting\n   ID: doc_credit_cards_credit_cards_(general)_012\n   Score: 0.0328\n   Content: This protocol is active from 11/14/2025 through ",
+      "reply_snippet": "I’m very sorry—this matches an active Rho-Bank credit-bureau reporting incident affecting some accounts that are actually in good standing.\n\nI’ve **logged an emergency priority escalation** with our c"
+    },
+    {
+      "task_id": "task_037",
+      "human_label": "faithful",
+      "majority_verdict": "faithful",
+      "unanimous": true,
+      "verdicts": [
+        "faithful",
+        "faithful",
+        "faithful"
+      ],
+      "evidence": "Aligned with document clauses (35694 chars).",
+      "reason": "Factual claims strictly ground in retrieved context.",
+      "doc_snippet": "1. Internal: Lost/Stolen Card - Cross-Product Security Protocol\n   ID: doc_bank_accounts_bank_accounts_(general)_030\n   Score: 0.0365\n   Content: When a customer reports a lost or stolen debit card, t",
+      "reply_snippet": "We need to secure the card and dispute both charges. I’ll retrieve your card account details and the relevant provisional-credit rules before proceeding."
+    },
+    {
+      "task_id": "task_037",
+      "human_label": "faithful",
+      "majority_verdict": "faithful",
+      "unanimous": true,
+      "verdicts": [
+        "faithful",
+        "faithful",
+        "faithful"
+      ],
+      "evidence": "Aligned with document clauses (26806 chars).",
+      "reason": "Factual claims strictly ground in retrieved context.",
+      "doc_snippet": "1. Provisional Credit Eligibility Guidelines (Internal)\n   ID: doc_credit_cards_credit_cards_(general)_015\n   Score: 0.0377\n   Content: ## Overview\nWhen processing a credit card transaction dispute, y",
+      "reply_snippet": "I found the required dispute and replacement procedures. I need a few details before taking action:\n\n1. When did you first notice these two charges?\n2. Did you contact either merchant about them?\n3. D"
+    },
+    {
+      "task_id": "task_037",
+      "human_label": "faithful",
+      "majority_verdict": "faithful",
+      "unanimous": true,
+      "verdicts": [
+        "faithful",
+        "faithful",
+        "faithful"
+      ],
+      "evidence": "Aligned with document clauses (24618 chars).",
+      "reason": "Factual claims strictly ground in retrieved context.",
+      "doc_snippet": "1. How to Order a Replacement Credit Card (Internal)\n   ID: doc_credit_cards_credit_card_replacements_001\n   Score: 0.0357\n   Content: ## Before you order\n- Verify the customer's identity using standa",
+      "reply_snippet": "I need the card’s last four digits to complete both the replacement and dispute records. What are the last four digits printed on your physical Silver Rewards Card?"
+    },
+    {
+      "task_id": "task_037",
+      "human_label": "faithful",
+      "majority_verdict": "faithful",
+      "unanimous": true,
+      "verdicts": [
+        "faithful",
+        "faithful",
+        "faithful"
+      ],
+      "evidence": "Aligned with document clauses (27667 chars).",
+      "reason": "Factual claims strictly ground in retrieved context.",
+      "doc_snippet": "1. How to Find Your Rho-Bank Credit Card Numbers Online\n   ID: doc_credit_cards_credit_cards_(general)_013\n   Score: 0.0377\n   Content: ## Retrieve the Last 4 Digits Using the Discovered Tool\n\nDiscove",
+      "reply_snippet": "There is an approved self-service tool for retrieving only the last four digits. I’ll provide it now; you can run it with your Silver Rewards account ID without sharing your full card number."
+    },
+    {
+      "task_id": "task_041",
+      "human_label": "faithful",
+      "majority_verdict": "faithful",
+      "unanimous": true,
+      "verdicts": [
+        "faithful",
+        "faithful",
+        "faithful"
+      ],
+      "evidence": "Aligned with document clauses (22568 chars).",
+      "reason": "Factual claims strictly ground in retrieved context.",
+      "doc_snippet": "1. Internal: Credit Card Rewards - Points vs Cash Back Representation\n   ID: doc_credit_cards_credit_cards_(general)_006\n   Score: 0.0359\n   Content: ## Rewards representation\nDue to a legacy backend ",
+      "reply_snippet": "I can help file these disputes. Since this involves accessing your account and filing formal disputes, I first need to verify your identity.\n\nPlease provide:\n1. Your full name (or Rho-Bank user ID)\n2."
+    },
+    {
+      "task_id": "task_041",
+      "human_label": "faithful",
+      "majority_verdict": "faithful",
+      "unanimous": true,
+      "verdicts": [
+        "faithful",
+        "faithful",
+        "faithful"
+      ],
+      "evidence": "Aligned with document clauses (33156 chars).",
+      "reason": "Factual claims strictly ground in retrieved context.",
+      "doc_snippet": "1. Internal: Lost/Stolen Card - Cross-Product Security Protocol\n   ID: doc_bank_accounts_bank_accounts_(general)_030\n   Score: 0.0374\n   Content: When a customer reports a lost or stolen debit card, t",
+      "reply_snippet": "The fraud-specific credit card guidance isn't fully surfaced. Let me search more precisely."
+    },
+    {
+      "task_id": "task_041",
+      "human_label": "faithful",
+      "majority_verdict": "faithful",
+      "unanimous": true,
+      "verdicts": [
+        "faithful",
+        "faithful",
+        "faithful"
+      ],
+      "evidence": "Aligned with document clauses (32409 chars).",
+      "reason": "Factual claims strictly ground in retrieved context.",
+      "doc_snippet": "1. Internal: Filing a Debit Card Transaction Dispute\n   ID: doc_bank_accounts_bank_accounts_(general)_031\n   Score: 0.0368\n   Content: When a customer needs to file a dispute for a debit card transact",
+      "reply_snippet": "I need to check dispute history and account/card details before filing. Let me search for the lookup procedures."
+    },
+    {
+      "task_id": "task_041",
+      "human_label": "faithful",
+      "majority_verdict": "faithful",
+      "unanimous": true,
+      "verdicts": [
+        "faithful",
+        "faithful",
+        "faithful"
+      ],
+      "evidence": "Aligned with document clauses (30746 chars).",
+      "reason": "Factual claims strictly ground in retrieved context.",
+      "doc_snippet": "1. Checking User Dispute History (Internal)\n   ID: doc_credit_cards_credit_cards_(general)_016\n   Score: 0.0377\n   Content: ## Summary\n\nTo retrieve a user's credit card dispute history, use the get_us",
+      "reply_snippet": "I need to retrieve your dispute history and card details. Unlocking the required tools now."
+    },
+    {
+      "task_id": "task_041",
+      "human_label": "faithful",
+      "majority_verdict": "faithful",
+      "unanimous": true,
+      "verdicts": [
+        "faithful",
+        "faithful",
+        "faithful"
+      ],
+      "evidence": "Aligned with document clauses (23018 chars).",
+      "reason": "Factual claims strictly ground in retrieved context.",
+      "doc_snippet": "1. How to Find Your Rho-Bank Credit Card Numbers Online\n   ID: doc_credit_cards_credit_cards_(general)_013\n   Score: 0.0377\n   Content: ## Retrieve the Last 4 Digits Using the Discovered Tool\n\nDiscove",
+      "reply_snippet": "I found the required lookup tool. I’ll provide it so you can retrieve each card’s last four digits securely rather than sharing full card numbers here."
+    },
+    {
+      "task_id": "synthetic_eval_01",
+      "human_label": "unfaithful",
+      "majority_verdict": "unfaithful",
+      "unanimous": true,
+      "verdicts": [
+        "unfaithful",
+        "unfaithful",
+        "unfaithful"
+      ],
+      "evidence": "Contradicts policy.",
+      "reason": "Unsubstantiated claim.",
+      "doc_snippet": "1. Filing a Credit Card Transaction Dispute (Internal)\n   ID: doc_credit_cards_credit_cards_(general)_014\n   Score: 0.0377\n   Content: ## Process Summary\nWhen a customer needs to file a formal dispute",
+      "reply_snippet": "The standard annual fee waiver requires 50 transactions instead of policy rules."
+    },
+    {
+      "task_id": "synthetic_eval_02",
+      "human_label": "unfaithful",
+      "majority_verdict": "unfaithful",
+      "unanimous": true,
+      "verdicts": [
+        "unfaithful",
+        "unfaithful",
+        "unfaithful"
+      ],
+      "evidence": "Contradicts policy.",
+      "reason": "Unsubstantiated claim.",
+      "doc_snippet": "1. How to Find Your Rho-Bank Credit Card Numbers Online\n   ID: doc_credit_cards_credit_cards_(general)_013\n   Score: 0.0377\n   Content: ## Retrieve the Last 4 Digits Using the Discovered Tool\n\nDiscove",
+      "reply_snippet": "Provisional credit is permanently guaranteed within 1 business hour unconditionally."
+    },
+    {
+      "task_id": "synthetic_eval_03",
+      "human_label": "unfaithful",
+      "majority_verdict": "unfaithful",
+      "unanimous": true,
+      "verdicts": [
+        "unfaithful",
+        "unfaithful",
+        "unfaithful"
+      ],
+      "evidence": "Contradicts policy.",
+      "reason": "Unsubstantiated claim.",
+      "doc_snippet": "1. Silver Rewards Card: Referral Program - Earn Rewards for Referring Friends\n   ID: doc_credit_cards_silver_rewards_card_011\n   Score: 0.0371\n   Content: ## What You Earn\n- Receive 75 for each succes",
+      "reply_snippet": "You can dispute transactions from up to 5 years ago without limits."
+    },
+    {
+      "task_id": "synthetic_eval_04",
+      "human_label": "unfaithful",
+      "majority_verdict": "unfaithful",
+      "unanimous": true,
+      "verdicts": [
+        "unfaithful",
+        "unfaithful",
+        "unfaithful"
+      ],
+      "evidence": "Contradicts policy.",
+      "reason": "Unsubstantiated claim.",
+      "doc_snippet": "1. Crypto-Cash Back: FAQ-2\n   ID: doc_credit_cards_crypto-cash_back_009\n   Score: 0.0374\n   Content: ## Eligibility\n- What is the minimum credit score to apply for the card to earn crypto rewards? $66",
+      "reply_snippet": "Rho-Bank reimburses all lost funds immediately before verification."
+    },
+    {
+      "task_id": "synthetic_eval_05",
+      "human_label": "unfaithful",
+      "majority_verdict": "unfaithful",
+      "unanimous": true,
+      "verdicts": [
+        "unfaithful",
+        "unfaithful",
+        "unfaithful"
+      ],
+      "evidence": "Contradicts policy.",
+      "reason": "Unsubstantiated claim.",
+      "doc_snippet": "1. Silver Rewards Card: Referral Program - Earn Rewards for Referring Friends\n   ID: doc_credit_cards_silver_rewards_card_011\n   Score: 0.0354\n   Content: ## What You Earn\n- Receive 75 for each succes",
+      "reply_snippet": "All card replacements cost $250 flat expedite fee."
+    },
+    {
+      "task_id": "synthetic_eval_06",
+      "human_label": "unfaithful",
+      "majority_verdict": "faithful",
+      "unanimous": true,
+      "verdicts": [
+        "faithful",
+        "faithful",
+        "faithful"
+      ],
+      "evidence": "Aligned with document clauses (13112 chars).",
+      "reason": "Factual claims strictly ground in retrieved context.",
+      "doc_snippet": "1. Generating a Credit Card Referral Link (Internal)\n   ID: doc_credit_cards_credit_cards_(general)_009\n   Score: 0.0377\n   Content: ## Pre-check before providing the referral tool\n- Search the knowle",
+      "reply_snippet": "Cash back dispute corrections are automatically credited to your savings account."
+    },
+    {
+      "task_id": "synthetic_eval_07",
+      "human_label": "unfaithful",
+      "majority_verdict": "unfaithful",
+      "unanimous": true,
+      "verdicts": [
+        "unfaithful",
+        "unfaithful",
+        "unfaithful"
+      ],
+      "evidence": "Contradicts policy.",
+      "reason": "Unsubstantiated claim.",
+      "doc_snippet": "1. Business Gold Rewards Card: Referral Program - Earn Rewards for Referring Businesses\n   ID: doc_business_credit_cards_business_gold_rewards_card_010\n   Score: 0.0377\n   Content: ## How the Referral",
+      "reply_snippet": "The dispute deadline for unauthorized charges is strictly 24 hours."
+    },
+    {
+      "task_id": "synthetic_eval_08",
+      "human_label": "unfaithful",
+      "majority_verdict": "unfaithful",
+      "unanimous": true,
+      "verdicts": [
+        "unfaithful",
+        "unfaithful",
+        "unfaithful"
+      ],
+      "evidence": "Contradicts policy.",
+      "reason": "Unsubstantiated claim.",
+      "doc_snippet": "1. EcoCard: Referral Program - Earn Rewards for Referring Friends\n   ID: doc_credit_cards_ecocard_011\n   Score: 0.0377\n   Content: ## What You Earn\n- Receive 50 for each successful referral\n- You can ",
+      "reply_snippet": "Credit limit increases are approved instantly without credit check."
+    },
+    {
+      "task_id": "synthetic_eval_09",
+      "human_label": "unfaithful",
+      "majority_verdict": "unfaithful",
+      "unanimous": true,
+      "verdicts": [
+        "unfaithful",
+        "unfaithful",
+        "unfaithful"
+      ],
+      "evidence": "Contradicts policy.",
+      "reason": "Unsubstantiated claim.",
+      "doc_snippet": "1. Business Silver Rewards Card: Referral Program - Earn Rewards for Referring Businesses\n   ID: doc_business_credit_cards_business_silver_rewards_card_013\n   Score: 0.0377\n   Content: ## What you can",
+      "reply_snippet": "Wire transfer reversal can be performed within 30 days after settlement."
+    }
+  ]
+}

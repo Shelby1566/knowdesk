@@ -82,20 +82,26 @@ def patch_retrieval_mode(mode: str = "hybrid") -> None:
         BM25Retriever.retrieve_batch = _ORIG_BM25_RETRIEVE_BATCH
 
 def _update_sec_from_last_turn(state: Any, incoming_msg: Any, guard: GuardEngine, sec: SecurityState) -> None:
-    """检查环境返回的 ToolMessage 是否成功，仅在非错误返回时更新核身与解锁状态"""
+    """检查环境返回的 ToolMessage 是否成功，仅在非错误返回时更新核身与解锁状态，并动态捕获 Schema"""
     tool_msgs = incoming_msg.tool_messages if isinstance(incoming_msg, MultiToolMessage) else [incoming_msg]
     failed_ids: set[str] = set()
+    content_by_id: dict[str, str] = {}
     for tm in tool_msgs:
         tm_id = str(getattr(tm, "id", ""))
-        content_low = str(getattr(tm, "content", "")).lower()
+        tm_content = str(getattr(tm, "content", ""))
+        content_by_id[tm_id] = tm_content
+        content_low = tm_content.lower()
         if getattr(tm, "error", False) or "error:" in content_low or "not found" in content_low:
             failed_ids.add(tm_id)
 
     for msg in reversed(state.messages):
         if isinstance(msg, AssistantMessage) and getattr(msg, "tool_calls", None):
             for tc in msg.tool_calls:
-                if str(getattr(tc, "id", "")) not in failed_ids:
-                    guard.update_state_after_success(tc.name, tc.arguments, sec)
+                tc_id = str(getattr(tc, "id", ""))
+                if tc_id not in failed_ids:
+                    guard.update_state_after_success(
+                        tc.name, tc.arguments, sec, result_content=content_by_id.get(tc_id)
+                    )
             break
 
 class KnowDeskPlainTauAgent(LLMAgent):

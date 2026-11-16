@@ -53,9 +53,81 @@ def normalize_for_security_inspection(raw_text: str) -> str:
     return s.lower()
 
 @dataclass
+class UnlockedToolSchema:
+    tool_name: str
+    description: str = ""
+    parameters: dict[str, str] = field(default_factory=dict)
+    required_params: list[str] = field(default_factory=list)
+    optional_params: list[str] = field(default_factory=list)
+
+def parse_unlocked_tool_schema(content: str, default_tool_name: str = "") -> UnlockedToolSchema | None:
+    """
+    动态从环境返回的 ToolMessage 或文档中提取解锁工具的参数 Schema：
+    - 支持 Markdown/YAML 列表格式 (Parameters:\n - param: type (required|optional))
+    - 支持 Python 签名格式 (func(a: str, b: int))
+    - 支持 JSON Schema 格式 ({"properties": ..., "required": ...})
+    """
+    if not content or not str(content).strip():
+        return None
+    raw = str(content)
+
+    # 1. 提取工具名
+    tool_m = re.search(r"Tool (?:unlocked:\s*|:\s*)([a-zA-Z0-9_]+)", raw, re.IGNORECASE)
+    tool_name = tool_m.group(1) if tool_m else default_tool_name
+
+    params: dict[str, str] = {}
+    req: list[str] = []
+    opt: list[str] = []
+
+    # 2. 匹配 Markdown/YAML 参数列表
+    param_pattern = re.compile(
+        r"-\s*([a-zA-Z0-9_]+)\s*:\s*([a-zA-Z0-9_]+)\s*\((required|optional)\)",
+        re.IGNORECASE,
+    )
+    for m in param_pattern.finditer(raw):
+        pname = m.group(1)
+        ptype = m.group(2).lower()
+        req_opt = m.group(3).lower()
+        params[pname] = ptype
+        if req_opt == "required":
+            req.append(pname)
+        else:
+            opt.append(pname)
+
+    # 3. 匹配函数签名格式 tool_name(param1: type, ...)
+    if not params:
+        sig_m = re.search(r"\b([a-zA-Z0-9_]+)\s*\(([^)]+)\)", raw)
+        if sig_m:
+            if not tool_name:
+                tool_name = sig_m.group(1)
+            raw_args = sig_m.group(2)
+            for part in raw_args.split(","):
+                part = part.strip()
+                if ":" in part:
+                    arg_name, arg_type = part.split(":", 1)
+                    arg_name = arg_name.strip()
+                    arg_type = arg_type.strip().split("=")[0].strip()
+                    if arg_name:
+                        params[arg_name] = arg_type
+                        if "=" in part:
+                            opt.append(arg_name)
+                        else:
+                            req.append(arg_name)
+
+    if not tool_name:
+        return None
+    return UnlockedToolSchema(
+        tool_name=tool_name,
+        parameters=params,
+        required_params=req,
+        optional_params=opt,
+    )
+
+@dataclass
 class SecurityState:
     verified: bool = False
     unlocked_tools: set[str] = field(default_factory=set)
+    unlocked_schemas: dict[str, UnlockedToolSchema] = field(default_factory=dict)
     approved_idempotency_keys: set[str] = field(default_factory=set)
 
 @dataclass(frozen=True)
@@ -161,6 +233,29 @@ class GuardEngine:
             )
             return GuardDecision("block", real_name, real_args, "R03_REQUIRE_UNLOCK_BEFORE_DISCOVERABLE_CALL", msg, err)
 
+        # R05: 动态 Schema 感知参数拦截（运行时前置拦截缺失必填参数）
+        if (
+            tool_name == "call_discoverable_agent_tool"
+            and real_name in sec_state.unlocked_schemas
+        ):
+            schema = sec_state.unlocked_schemas[real_name]
+            missing = [
+                p for p in schema.required_params
+                if p not in real_args or real_args[p] is None or (isinstance(real_args[p], str) and not real_args[p].strip())
+            ]
+            if missing:
+                msg = (
+                    f"Missing required argument(s) {missing} for unlocked tool '{real_name}'. "
+                    f"Required parameters: {schema.required_params}"
+                )
+                err = StructuredToolError(
+                    error_type="invalid_arguments",
+                    message=msg,
+                    rule_id="R05_DYNAMIC_SCHEMA_VALIDATION",
+                    retryable=True,
+                )
+                return GuardDecision("block", real_name, real_args, "R05_DYNAMIC_SCHEMA_VALIDATION", msg, err)
+
         if self.is_high_risk_write(tool_name, real_name):
             if self.enforce_verification and not sec_state.verified:
                 msg = f"High-risk operation '{real_name}' requires prior verification."
@@ -179,7 +274,13 @@ class GuardEngine:
 
         return GuardDecision("allow", real_name, real_args)
 
-    def update_state_after_success(self, tool_name: str, raw_args: dict[str, Any] | str, sec_state: SecurityState) -> None:
+    def update_state_after_success(
+        self,
+        tool_name: str,
+        raw_args: dict[str, Any] | str,
+        sec_state: SecurityState,
+        result_content: str | None = None,
+    ) -> None:
         real_name, real_args, _ = unwrap_tool_call(tool_name, raw_args)
         if tool_name == "unlock_discoverable_agent_tool":
             unlocked = str(
@@ -188,5 +289,16 @@ class GuardEngine:
             ).strip()
             if unlocked:
                 sec_state.unlocked_tools.add(unlocked)
+            if result_content:
+                schema = parse_unlocked_tool_schema(result_content, default_tool_name=unlocked)
+                if schema and schema.tool_name:
+                    sec_state.unlocked_schemas[schema.tool_name] = schema
+                    sec_state.unlocked_tools.add(schema.tool_name)
+        elif result_content and ("Tool unlocked:" in result_content or "Parameters:" in result_content):
+            schema = parse_unlocked_tool_schema(result_content)
+            if schema and schema.tool_name:
+                sec_state.unlocked_schemas[schema.tool_name] = schema
+                sec_state.unlocked_tools.add(schema.tool_name)
+
         if real_name in STRICT_VERIFICATION_TOOLS or real_name.startswith(("verify_", "authenticate_")):
             sec_state.verified = True

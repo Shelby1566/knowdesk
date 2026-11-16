@@ -13,6 +13,7 @@ class AgentGraphState(TypedDict, total=False):
     messages: Annotated[list[dict[str, Any]], operator.add]
     verified: bool
     unlocked_tools: list[str]
+    unlocked_schemas: dict[str, Any]
     approved_keys: list[str]
     pending_tool_call: dict[str, Any] | None
     pending_tool_calls: list[dict[str, Any]]
@@ -60,6 +61,7 @@ def build_knowdesk_graph(
         sec = SecurityState(
             verified=bool(state.get("verified", False)),
             unlocked_tools=set(state.get("unlocked_tools", [])),
+            unlocked_schemas=dict(state.get("unlocked_schemas", {})),
             approved_idempotency_keys=set(state.get("approved_keys", [])),
         )
         parsed = t_args
@@ -169,15 +171,17 @@ def build_knowdesk_graph(
         sec = SecurityState(
             verified=bool(state.get("verified", False)),
             unlocked_tools=set(state.get("unlocked_tools", [])),
+            unlocked_schemas=dict(state.get("unlocked_schemas", {})),
             approved_idempotency_keys=set(state.get("approved_keys", [])),
         )
         if '"error_type":' not in out_str:
-            guard.update_state_after_success(t_name, tc.get("arguments", {}), sec)
+            guard.update_state_after_success(t_name, tc.get("arguments", {}), sec, result_content=out_str)
 
         return {
             "messages": [{"role": "tool", "tool_call_id": tc.get("id", "call_1"), "name": t_name, "content": out_str}],
             "verified": sec.verified,
             "unlocked_tools": sorted(list(sec.unlocked_tools)),
+            "unlocked_schemas": dict(sec.unlocked_schemas),
             "pending_tool_call": None,
         }
 

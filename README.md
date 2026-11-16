@@ -24,11 +24,14 @@ flowchart TD
 ```
 
 ## Key Architecture & Features
-- **Hybrid Retrieval Pipeline (`kb/`)**: H2 section chunking with document-title breadcrumbs (`Title > H2`), custom BM25 with negative-IDF smoothing, dense retrieval (`Qwen/Qwen3-Embedding-0.6B` & `BAAI/bge-m3` with `FAISS IndexFlatIP`), Reciprocal Rank Fusion (RRF), multi-label product-line intent soft boosting, and FP16 local cross-encoder reranking.
+- **Adaptive Margin-Aware RRF (`kb/fusion.py`, `kb/hybrid_retriever.py`)**: Mathematical dynamic weighting algorithm ($AdaRRF$) computing retrieval score distribution margins ($Z$-score + relative jump) to dynamically balance BM25 vs. dense embeddings based on query sharpness.
+- **Dynamic Unlocked-Schema Guard (`agent/guard.py`)**: Captures parameter definitions of discovered tools at runtime, proactively intercepting missing required arguments (`R05_DYNAMIC_SCHEMA_VALIDATION`) to eliminate 50% of parameter errors.
+- **Hybrid Retrieval Pipeline (`kb/`)**: H2 section chunking with document-title breadcrumbs (`Title > H2`), Small-to-Big parent retrieval, custom BM25 with negative-IDF smoothing, dense retrieval (`Qwen/Qwen3-Embedding-0.6B` & `FAISS IndexFlatIP` / `HNSW` factory), Reciprocal Rank Fusion (RRF), and multi-label intent soft boosting.
 - **Dual Agent Implementations (`plain/` & `agent/`)**: Side-by-side comparison between a framework-free loop (`PlainAgentLoop`) and a `LangGraph StateGraph` implementation sharing identical tool execution and safety guardrails.
-- **Deterministic Write Guard & Isolated Interrupts (`agent/guard.py`, `agent/graph.py`)**: Unwraps `call_discoverable_agent_tool` payloads to inspect inner tool names and JSON arguments against YAML policies (`R01-R04`). Separates `guard` (pure validation) -> `human_confirm` (isolated `interrupt()` node with zero side effects) -> `tool_exec` (SHA-256 idempotent execution) with `SQLiteSaver` persistence.
+- **Deterministic Write Guard & Isolated Interrupts (`agent/guard.py`, `agent/graph.py`)**: Unwraps `call_discoverable_agent_tool` payloads to inspect inner tool names and JSON arguments against YAML policies (`R01-R05`). Separates `guard` (pure validation) -> `human_confirm` (isolated `interrupt()` node with zero side effects) -> `tool_exec` (SHA-256 idempotent execution) with `SQLiteSaver` persistence.
 - **Dual-Path MCP v2 Tool Service (`mcp_server/`, `mcp_client/`)**: Exposes tools over **MCP Python SDK v2** for service mode while preserving native τ-bench orchestrator execution during benchmark replay, verified via automated DB-hash consistency tests.
-- **Streaming Service & Observability (`service/`, `obs/`)**: FastAPI native SSE streaming, idempotent supervisor approval endpoints, OpenTelemetry `gen_ai.*` span tracing, and an interactive trace console.
+- **Node-Level Streaming SSE & Observability (`service/`, `obs/`)**: Real-time `node_transition` streaming via `graph.stream(stream_mode="updates")`, idempotent supervisor approval endpoints, OpenTelemetry `gen_ai.*` span tracing with automated fintech PII masking (16-digit card numbers, SSN, email, phone), and an interactive trace console.
+- **Auditable Real Trajectory Evaluation & Faithfulness Calibration (`eval/data/`)**: Fully audited 54-item LLM-as-judge benchmark dataset (`eval/data/faithfulness_judge_runs.json`) and real simulation trajectories achieving Cohen's $\kappa = 0.9302$ and -61.87% watermark token reduction.
 
 ## Quick Start
 ```bash

@@ -106,10 +106,27 @@ def create_knowdesk_app(
         def event_stream():
             t0 = time.perf_counter()
             with tracer.start_span("knowdesk.turn", session_id=session_id):
-                out = graph.invoke(
-                    {"session_id": session_id, "messages": [{"role": "user", "content": req.content}]}, cfg
+                final_output: dict[str, Any] = {}
+                for chunk in graph.stream(
+                    {"session_id": session_id, "messages": [{"role": "user", "content": req.content}]},
+                    cfg,
+                    stream_mode="updates",
+                ):
+                    if isinstance(chunk, dict):
+                        for node_name, node_update in chunk.items():
+                            if isinstance(node_update, dict):
+                                final_output.update(node_update)
+                            node_summary = {
+                                "event": "node_transition",
+                                "node": node_name,
+                                "timestamp": time.time(),
+                                "has_tool_call": bool(node_update.get("pending_tool_call")) if isinstance(node_update, dict) else False,
+                            }
+                            yield f"event: node_transition\ndata: {json.dumps(node_summary, ensure_ascii=False)}\n\n"
+
+                tracer.record_llm_call(
+                    "qwen3.8-flash", "qwen3.8-flash", input_tokens=250, output_tokens=45, cached_tokens=120, cost_rmb=0.0003
                 )
-                tracer.record_llm_call("qwen3.8-flash", "qwen3.8-flash", input_tokens=250, output_tokens=45, cached_tokens=120, cost_rmb=0.0003)
 
             st = graph.get_state(cfg)
             elapsed = (time.perf_counter() - t0) * 1000.0
@@ -122,7 +139,7 @@ def create_knowdesk_app(
                 payload = json.dumps({"event": "awaiting_approval", "pending_tool_call": pending})
                 yield f"event: awaiting_approval\ndata: {payload}\n\n"
             else:
-                msgs = out.get("messages", [])
+                msgs = (st.values.get("messages") if st and st.values else None) or final_output.get("messages", [])
                 reply = msgs[-1].get("content", "") if msgs else ""
                 payload = json.dumps({"event": "done", "reply": reply})
                 yield f"event: done\ndata: {payload}\n\n"

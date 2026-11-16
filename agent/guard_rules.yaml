@@ -40,3 +40,6 @@ rules:
       - "grep"
       - "unlock_discoverable_agent_tool"
       - "list_discoverable_agent_tools"
+  - id: "R05_DYNAMIC_SCHEMA_VALIDATION"
+    action: "block"
+    description: "Validate required parameters against dynamically discovered tool schemas captured at runtime"
