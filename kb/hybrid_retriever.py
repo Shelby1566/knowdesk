@@ -8,6 +8,7 @@ from kb.dense import DenseRetriever
 from kb.fusion import adaptive_rrf_fusion, rrf_fusion
 from kb.loader import load_documents
 from kb.router import apply_intent_boost, map_doc_to_product_line, predict_product_lines_keyword
+from kb.sections import format_matched_section
 from kb.tokenize import tokenize
 
 class KnowDeskHybridRetriever:
@@ -62,7 +63,8 @@ class KnowDeskHybridRetriever:
     ) -> list[dict[str, Any]]:
         """
         Parent-Document Retrieval (Small-to-Big):
-        先通过细粒度子块精确匹配，再回拉所属 H2 完整章节与父文档标题，兼顾匹配精度与上下文完整性。
+        先命中子块，再只返回该子块所属的父级 H2 正文 parent_section_text，以及 doc_id / title。
+        不附带整篇文档，避免把未命中的章节送进上下文。
         """
         matched_chunks = self.search_chunks(query, k=k * 3, fusion_mode=fusion_mode, acl=acl)
         seen_docs: set[str] = set()
@@ -74,11 +76,11 @@ class KnowDeskHybridRetriever:
             parent_doc = self.doc_map[ch.doc_id]
             results.append({
                 "id": ch.doc_id,
+                "doc_id": ch.doc_id,
                 "matched_chunk_id": ch.chunk_id,
                 "breadcrumb": ch.breadcrumb,
                 "title": parent_doc.title,
                 "parent_section_text": ch.text,
-                "content": parent_doc.content,
                 "score": round(sc, 5),
             })
             if len(results) >= k:
@@ -106,11 +108,28 @@ class KnowDeskHybridRetriever:
                     break
         return results
 
-        results = []
-        for did, sc in boosted:
-            d = self.doc_map.get(did)
-            if d:
-                results.append({"id": d.doc_id, "title": d.title, "content": d.content, "score": round(sc, 5)})
+    def search_sections(
+        self, query: str, k: int = 10, fusion_mode: str = "adaptive_rrf", acl: AccessControlContext | None = None
+    ) -> list[dict[str, Any]]:
+        """给模型的检索结果：每个文档只保留得分最高的 H2 章节。"""
+        matched = self.search_chunks(query, k=max(k * 3, k), fusion_mode=fusion_mode, acl=acl)
+        seen: set[str] = set()
+        results: list[dict[str, Any]] = []
+        for chunk, score in matched:
+            if chunk.doc_id in seen:
+                continue
+            seen.add(chunk.doc_id)
+            parent = self.doc_map[chunk.doc_id]
+            results.append({
+                "id": chunk.doc_id,
+                "chunk_id": chunk.chunk_id,
+                "title": parent.title,
+                "breadcrumb": chunk.breadcrumb,
+                "content": format_matched_section(chunk),
+                "score": round(score, 5),
+            })
+            if len(results) >= k:
+                break
         return results
 
     def search_with_bounded_check(

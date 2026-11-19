@@ -11,11 +11,11 @@ os.environ.setdefault("LITELLM_LOCAL_MODEL_COST_MAP", "True")
 builtins.input = lambda *args, **kwargs: "y"
 
 from adapters.tau2_adapter import register_knowdesk_components, patch_retrieval_mode
+from eval.gate import load_splits, require_tunable, tunable_ids
 from eval.metrics import summarize_simulation_file
 from eval.pass_k import paired_bootstrap_diff
 from tau2.cli import main as tau2_cli_main
 
-SPLITS_PATH = Path(__file__).resolve().parent / "splits.json"
 SIM_ROOT = Path(__file__).resolve().parents[2] / "tau2-bench/data/simulations"
 REPORT_X3_PATH = Path(__file__).resolve().parents[1] / "RESULTS_X3_ABLATION.md"
 MODEL_NAME = os.getenv("KNOWDESK_MODEL", "dashscope/qwen3.8-flash")
@@ -69,8 +69,9 @@ def run_v2_config(save_name: str, agent_name: str, guard_on: str, task_ids: list
     return res_file
 
 def main():
-    splits = json.loads(SPLITS_PATH.read_text(encoding="utf-8"))
-    task_ids = splits["regression_ids"][:10]
+    splits = load_splits()
+    task_ids = tunable_ids(splits, "regression10")
+    require_tunable(task_ids, splits)
 
     base_path = SIM_ROOT / "x2_dev10_lite_1_base_bm25/results.json"
     v1_graph_path = SIM_ROOT / "x2_dev10_lite_4_graph_hybrid/results.json"

@@ -5,7 +5,8 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, interrupt
 from agent.guard import GuardEngine, SecurityState
-from tools.schemas import StructuredToolError
+from agent.workflow import project_messages_for_model, stage_directive
+from tools.schemas import StructuredToolError, is_tool_result_success
 from tools.tool_wrapper import ReliableToolExecutor, compute_idempotency_key
 
 class AgentGraphState(TypedDict, total=False):
@@ -40,18 +41,41 @@ def build_knowdesk_graph(
     """
     def agent_node(state: AgentGraphState) -> dict[str, Any]:
         steps = state.get("steps", 0) + 1
-        resp = llm_fn(state.get("messages", []))
+        sec = SecurityState(
+            verified=bool(state.get("verified", False)),
+            unlocked_tools=set(state.get("unlocked_tools", [])),
+            unlocked_schemas=dict(state.get("unlocked_schemas", {})),
+            approved_idempotency_keys=set(state.get("approved_keys", [])),
+        )
+        directive = stage_directive(state.get("messages", []), sec, available_tools=set(tool_funcs))
+        visible = project_messages_for_model(state.get("messages", []), directive)
+        resp = llm_fn(visible)
         tcs = resp.get("tool_calls") or []
         msg = {"role": "assistant", "content": resp.get("content", ""), "tool_calls": tcs}
         if not tcs:
             return {"messages": [msg], "steps": steps, "pending_tool_call": None, "pending_tool_calls": [], "stop_reason": "completed"}
-        return {"messages": [msg], "steps": steps, "pending_tool_calls": list(tcs), "pending_tool_call": tcs[0]}
+        return {"messages": [msg], "steps": steps, "pending_tool_calls": list(tcs), "pending_tool_call": None}
+
+    def _skip_message(call: dict[str, Any], why: str, error_type: str) -> dict[str, Any]:
+        err = StructuredToolError(
+            error_type=error_type,
+            message=f"Skipped '{call.get('name', '')}' because an earlier call in the same batch was {why}.",
+            retryable=False,
+        )
+        return {
+            "role": "tool",
+            "tool_call_id": call.get("id", ""),
+            "name": call.get("name", ""),
+            "content": err.to_tool_message(),
+        }
 
     def guard_node(state: AgentGraphState) -> dict[str, Any]:
         queue = list(state.get("pending_tool_calls") or [])
-        if not queue and state.get("pending_tool_call"):
-            queue = [state["pending_tool_call"]]
-        tc = queue.pop(0) if queue else {}
+        seated = state.get("pending_tool_call")
+        if seated:
+            tc = seated
+        else:
+            tc = queue.pop(0) if queue else {}
 
         t_name = tc.get("name", "")
         t_args = tc.get("arguments", {})
@@ -78,18 +102,18 @@ def build_knowdesk_graph(
 
         if decision.action == "block":
             blocks = state.get("guard_blocks", 0) + 1
-            err_msg = {
+            messages = [{
                 "role": "tool", "tool_call_id": tc_id, "name": t_name,
-                "content": decision.error_payload.to_tool_message(),
-            }
+                "content": decision.error_payload.to_tool_message() if decision.error_payload else "{}",
+            }]
+            messages.extend(_skip_message(rest, "blocked", "guard_blocked") for rest in queue)
             stop = "max_guard_blocks_exceeded" if blocks >= max_guard_blocks else ""
-            route = "end" if stop else ("guard" if queue else "agent")
             return {
-                "messages": [err_msg],
+                "messages": messages,
                 "guard_blocks": blocks,
-                "guard_route": route,
+                "guard_route": "end" if stop else "agent",
                 "stop_reason": stop,
-                "pending_tool_calls": queue,
+                "pending_tool_calls": [],
                 "pending_tool_call": None,
             }
 
@@ -145,13 +169,19 @@ def build_knowdesk_graph(
             retryable=False,
         )
         queue = list(state.get("pending_tool_calls") or [])
-        route = "guard" if queue else "agent"
+        messages = [{
+            "role": "tool",
+            "tool_call_id": tc.get("id", "call_1"),
+            "name": tc.get("name", ""),
+            "content": rej_err.to_tool_message(),
+        }]
+        messages.extend(_skip_message(rest, "rejected", "user_rejected") for rest in queue)
         return {
             "confirm_enter_count": enter_cnt,
-            "messages": [{"role": "tool", "tool_call_id": tc.get("id", "call_1"), "name": tc.get("name", ""), "content": rej_err.to_tool_message()}],
+            "messages": messages,
             "pending_tool_call": None,
-            "pending_tool_calls": queue,
-            "approval_decision": {"route": route},
+            "pending_tool_calls": [],
+            "approval_decision": {"route": "agent"},
         }
 
     def tool_exec_node(state: AgentGraphState) -> dict[str, Any]:
@@ -174,7 +204,7 @@ def build_knowdesk_graph(
             unlocked_schemas=dict(state.get("unlocked_schemas", {})),
             approved_idempotency_keys=set(state.get("approved_keys", [])),
         )
-        if '"error_type":' not in out_str:
+        if is_tool_result_success(out_str):
             guard.update_state_after_success(t_name, tc.get("arguments", {}), sec, result_content=out_str)
 
         return {

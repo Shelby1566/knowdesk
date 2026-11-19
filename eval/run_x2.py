@@ -12,11 +12,11 @@ os.environ.setdefault("LITELLM_LOCAL_MODEL_COST_MAP", "True")
 builtins.input = lambda *args, **kwargs: "y"
 
 from adapters.tau2_adapter import register_knowdesk_components, patch_retrieval_mode
+from eval.gate import load_splits, require_tunable, tunable_ids
 from eval.metrics import summarize_simulation_file, load_tasks_map, compute_action_recall, compute_online_doc_recall
 from kb.loader import load_documents
 from tau2.cli import main as tau2_cli_main
 
-SPLITS_PATH = Path(__file__).resolve().parent / "splits.json"
 SIM_ROOT = Path(__file__).resolve().parents[2] / "tau2-bench/data/simulations"
 REPORT_X2_PATH = Path(__file__).resolve().parents[1] / "RESULTS_X2.md"
 TAXONOMY_PATH = Path(__file__).resolve().parents[1] / "docs/FAILURE_TAXONOMY.md"
@@ -92,9 +92,10 @@ def classify_failure(sim: dict, task_obj: dict, all_doc_ids: set[str], title_to_
     return "6. 子任务顺序或复杂条款推理偏差 (SUBTASK_ORDER_OR_REASONING)"
 
 def main():
-    splits = json.loads(SPLITS_PATH.read_text(encoding="utf-8"))
+    splits = load_splits()
     use_full = "--full" in sys.argv
-    task_ids = splits["dev_ids"] if use_full else splits["regression_ids"][:10]
+    task_ids = tunable_ids(splits, "dev" if use_full else "regression10")
+    require_tunable(task_ids, splits)
     tag = "dev30" if use_full else "dev10_lite"
 
     configs = [

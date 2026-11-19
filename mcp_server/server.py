@@ -102,7 +102,7 @@ class SessionEnvironmentManager:
         if tool_name == "KB_search":
             q = str(arguments.get("query", ""))
             k = int(arguments.get("top_k", 10))
-            hits = KnowDeskHybridRetriever.get_instance().search(q, k=k)
+            hits = KnowDeskHybridRetriever.get_instance().search_sections(q, k=k)
             return {"content": json.dumps(hits, ensure_ascii=False), "error": False}
 
         call_id = f"mcp_{len(self._action_logs[session_id])}"

@@ -11,11 +11,19 @@ class RetrievalSubAgent:
         self.chunk_lookup = chunk_lookup
         self.selector_fn = selector_fn
         self.invalid_ref_count = 0
+        self.out_of_candidate_ref_count = 0
 
     def isolate_and_extract(self, query: str, candidate_chunks: list[Chunk], max_selected: int = 5) -> list[dict[str, str]]:
         selections = self.selector_fn(query, candidate_chunks)
+        candidate_ids = {chunk.chunk_id for chunk in candidate_chunks}
         extracted: list[dict[str, str]] = []
         for cid, reason in selections:
+            if cid not in candidate_ids:
+                if cid in self.chunk_lookup:
+                    self.out_of_candidate_ref_count += 1
+                else:
+                    self.invalid_ref_count += 1
+                continue
             chunk = self.chunk_lookup.get(cid)
             if chunk is None:
                 self.invalid_ref_count += 1

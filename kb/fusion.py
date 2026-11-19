@@ -45,14 +45,19 @@ def adaptive_rrf_fusion(
     temperature: float = 1.0,
 ) -> list[tuple[str, float]]:
     """
-    自适应信息熵/尖峰度加权 RRF (Adaptive Margin-Aware RRF / AdaRRF):
-    数学原理：
-    对每一路检索器 r ∈ {bm25, dense, ...}，计算其 Top-K 得分分布的尖峰度确信指标 w_r:
-        w_r = (s_r(1) - μ_r) / (σ_r + ε) + (s_r(1) - s_r(2)) / (σ_r + ε)
-    通过 Softmax 归一化为动态融合权重:
-        ŵ_r = exp(w_r / τ) / Σ exp(w_j / τ)
-    最终计算自适应倒数排名融合得分:
-        AdaRRF(d) = Σ_r ŵ_r * (1.0 / (rrf_k + rank_r(d)))
+    自适应尖峰度加权 RRF (Adaptive Margin-Aware RRF / AdaRRF)。
+    与 calculate_distribution_margin 的实现一致：
+    对每一路检索器 r，令 scores 为该路得分，margin_r = calculate_distribution_margin(scores)：
+        无得分时 margin = 0
+        只有一个得分时 margin = 2.0
+        否则 μ = mean(scores)，σ = sqrt(mean((s-μ)^2))
+             z = max(0, (s1 - μ) / (σ + ε))，当 σ <= ε 时 z = 0
+             rel_gap = max(0, (s1 - s2) / (|μ| + ε))
+             margin = clamp(z * (1 + rel_gap), 0.01, 20)
+    Softmax 先减去最大 margin 做数值稳定，τ = max(1e-3, temperature)：
+        ŵ_r = exp((margin_r - max_j margin_j) / τ) / Σ_j exp((margin_j - max_k margin_k) / τ)
+    融合得分与代码一致：
+        AdaRRF(d) = Σ_r ŵ_r / (rrf_k + rank_r(d))
 
     动态效果：
     - 精确代码/专业术语检索时：BM25 尖峰度极高，自适应加权主导融合；

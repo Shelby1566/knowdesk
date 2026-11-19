@@ -7,8 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 import yaml
-from agent.model_armor import VertexModelArmor, ArmorVerdict
-from tools.schemas import StructuredToolError
+from tools.schemas import StructuredToolError, is_tool_result_success
 
 DEFAULT_RULES_PATH = Path(__file__).resolve().parent / "guard_rules.yaml"
 
@@ -54,27 +53,177 @@ def normalize_for_security_inspection(raw_text: str) -> str:
     return s.lower()
 
 @dataclass
+class RuleVerdict:
+    passed: bool
+    risk_category: Literal["clean", "jailbreak", "data_leakage", "toxic_financial_promise", "system_override"]
+    confidence: float
+    reason: str = ""
+
+
+class LocalRuleChecker:
+    """本地输入/输出规则检查。正则直接跑在进程内，不调用外部安全服务。"""
+
+    INPUT_JAILBREAKS = [
+        re.compile(r"\b(?:ignore|forget|disregard)\s+(?:all\s+)?(?:previous|prior|above)\s+(?:instructions|rules|prompts)\b", re.IGNORECASE),
+        re.compile(r"\b(?:ignora|olvida)\s+(?:todas\s+(?:las\s+)?|las\s+)?instrucciones\s+(?:anteriores|previas)\b", re.IGNORECASE),
+        re.compile(r"(?:忽略|无视|丢弃|绕过).*?(?:指令|提示词|规则|约束|开发者模式)", re.IGNORECASE),
+        re.compile(r"\b(?:забудь|игнорируй)\s+(?:все\s+)?предыдущие\s+инструкции\b", re.IGNORECASE),
+        re.compile(r"\b(?:dan|developer\s+mode|jailbreak|evil\s*confidant|unfiltered\s+mode)\b", re.IGNORECASE),
+        re.compile(r"\byou\s+are\s+now\s+(?:in\s+)?(?:god\s+mode|unrestricted|an\s+ai\s+without\s+rules)\b", re.IGNORECASE),
+    ]
+    FINANCIAL_PROHIBITED_CLAIMS = [
+        re.compile(r"\bguarantee(?:d)?\s+100%\s+(?:return|profit|refund\s+without\s+condition)\b", re.IGNORECASE),
+        re.compile(r"(?:保证|承诺)(?:百分之百|100%)(?:全额退款无需审核|绝对无风险|超高收益)", re.IGNORECASE),
+        re.compile(r"\bwaive\s+all\s+(?:regulatory|fbi|irs|compliance)\s+requirements\b", re.IGNORECASE),
+    ]
+    DATA_LEAKAGE_RE = [
+        re.compile(r"\b(?:\d{4}[ -]?){3}\d{4}\b"),
+        re.compile(r"\b\d{3}-\d{2}-\d{4}\b"),
+    ]
+    EXFILTRATION_RE = re.compile(r"!\[.*?\]\((https?://[^\s)]+)\)")
+
+    def inspect_input(self, text: str) -> RuleVerdict:
+        sample = str(text)
+        for pattern in self.INPUT_JAILBREAKS:
+            if pattern.search(sample):
+                return RuleVerdict(
+                    passed=False,
+                    risk_category="jailbreak",
+                    confidence=0.98,
+                    reason=f"Local rule checker blocked a jailbreak pattern: '{pattern.pattern}'",
+                )
+        return RuleVerdict(passed=True, risk_category="clean", confidence=1.0)
+
+    def inspect_output(self, response_text: str) -> RuleVerdict:
+        sample = str(response_text)
+        for pattern in self.DATA_LEAKAGE_RE:
+            if pattern.search(sample):
+                return RuleVerdict(
+                    passed=False,
+                    risk_category="data_leakage",
+                    confidence=0.99,
+                    reason="Local rule checker blocked raw payment or identity data in the response.",
+                )
+        for pattern in self.FINANCIAL_PROHIBITED_CLAIMS:
+            if pattern.search(sample):
+                return RuleVerdict(
+                    passed=False,
+                    risk_category="toxic_financial_promise",
+                    confidence=0.95,
+                    reason="Local rule checker blocked an absolute financial guarantee in the response.",
+                )
+        if self.EXFILTRATION_RE.search(sample):
+            return RuleVerdict(
+                passed=False,
+                risk_category="jailbreak",
+                confidence=0.92,
+                reason="Local rule checker blocked a markdown image exfiltration URL in the response.",
+            )
+        return RuleVerdict(passed=True, risk_category="clean", confidence=1.0)
+
+
+@dataclass
 class UnlockedToolSchema:
     tool_name: str
     description: str = ""
     parameters: dict[str, str] = field(default_factory=dict)
     required_params: list[str] = field(default_factory=list)
     optional_params: list[str] = field(default_factory=list)
+    enums: dict[str, list[Any]] = field(default_factory=dict)
+
+
+def _iter_json_dicts(raw: str):
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        parsed = None
+    if isinstance(parsed, dict):
+        yield parsed
+        return
+    decoder = json.JSONDecoder()
+    index = 0
+    while index < len(raw):
+        brace = raw.find("{", index)
+        if brace < 0:
+            return
+        try:
+            obj, end = decoder.raw_decode(raw[brace:])
+        except json.JSONDecodeError:
+            index = brace + 1
+            continue
+        if isinstance(obj, dict):
+            yield obj
+        index = brace + max(end, 1)
+
+
+def _schema_from_json_object(obj: dict[str, Any], tool_name: str) -> UnlockedToolSchema | None:
+    node = obj if isinstance(obj.get("properties"), dict) else None
+    parameters = obj.get("parameters")
+    if node is None and isinstance(parameters, dict) and isinstance(parameters.get("properties"), dict):
+        node = parameters
+    if node is None:
+        return None
+    properties = node.get("properties") or {}
+    required = [str(name) for name in (node.get("required") or [])]
+    params: dict[str, str] = {}
+    enums: dict[str, list[Any]] = {}
+    optional: list[str] = []
+    for pname, spec in properties.items():
+        key = str(pname)
+        if isinstance(spec, dict):
+            params[key] = str(spec.get("type", "string")).lower()
+            if isinstance(spec.get("enum"), list):
+                enums[key] = list(spec["enum"])
+        else:
+            params[key] = "string"
+        if key not in required:
+            optional.append(key)
+    name = tool_name or str(obj.get("name") or obj.get("title") or "")
+    if not name:
+        return None
+    return UnlockedToolSchema(
+        tool_name=name,
+        description=str(obj.get("description") or ""),
+        parameters=params,
+        required_params=required,
+        optional_params=optional,
+        enums=enums,
+    )
+
+
+def _value_matches_type(expected: str, value: Any) -> bool:
+    kind = expected.lower().strip()
+    if kind in {"string", "str"}:
+        return isinstance(value, str)
+    if kind in {"integer", "int"}:
+        return isinstance(value, int) and not isinstance(value, bool)
+    if kind in {"number", "float"}:
+        return isinstance(value, (int, float)) and not isinstance(value, bool)
+    if kind in {"boolean", "bool"}:
+        return isinstance(value, bool)
+    if kind in {"object", "dict"}:
+        return isinstance(value, dict)
+    if kind in {"array", "list"}:
+        return isinstance(value, list)
+    return True
 
 def parse_unlocked_tool_schema(content: str, default_tool_name: str = "") -> UnlockedToolSchema | None:
     """
     动态从环境返回的 ToolMessage 或文档中提取解锁工具的参数 Schema：
-    - 支持 Markdown/YAML 列表格式 (Parameters:\n - param: type (required|optional))
-    - 支持 Python 签名格式 (func(a: str, b: int))
-    - 支持 JSON Schema 格式 ({"properties": ..., "required": ...})
+    - 优先解析标准 JSON Schema（required、properties.type、properties.enum，可嵌在 parameters 下）
+    - 兼容 Markdown/YAML 列表 (Parameters:\n - param: type (required|optional))
+    - 兼容 Python 签名 (func(a: str, b: int))
     """
     if not content or not str(content).strip():
         return None
     raw = str(content)
 
-    # 1. 提取工具名
     tool_m = re.search(r"Tool (?:unlocked:\s*|:\s*)([a-zA-Z0-9_]+)", raw, re.IGNORECASE)
     tool_name = tool_m.group(1) if tool_m else default_tool_name
+    for obj in _iter_json_dicts(raw):
+        schema = _schema_from_json_object(obj, tool_name)
+        if schema is not None:
+            return schema
 
     params: dict[str, str] = {}
     req: list[str] = []
@@ -145,11 +294,13 @@ def unwrap_tool_call(tool_name: str, raw_args: dict[str, Any] | str) -> tuple[st
         try:
             args_dict = json.loads(raw_args) if raw_args.strip() else {}
         except json.JSONDecodeError as e:
-            return tool_name, {}, f"Outer arguments is not valid JSON: {e}"
+            return tool_name, {}, f"R01: outer arguments is not valid JSON: {e}"
+        if not isinstance(args_dict, dict):
+            return tool_name, {}, "R01: outer arguments JSON must decode to an object."
     elif isinstance(raw_args, dict):
         args_dict = dict(raw_args)
     else:
-        return tool_name, {}, "Outer arguments must be a JSON object."
+        return tool_name, {}, "R01: outer arguments must be a JSON object."
 
     if tool_name == "call_discoverable_agent_tool":
         inner_name = str(args_dict.get("agent_tool_name", "")).strip()
@@ -194,11 +345,11 @@ class GuardEngine:
         r04 = self.rules.get("R04_HIGH_RISK_WRITE_VERIFICATION_AND_APPROVAL", {})
         self.high_risk_prefixes = tuple(r04.get("high_risk_prefixes", []))
         self.read_or_verify_tools = set(r04.get("read_or_verify_tools", []))
-        self.model_armor = VertexModelArmor()
+        self.local_rules = LocalRuleChecker()
 
-    def inspect_output(self, response_text: str) -> ArmorVerdict:
-        """调用 VertexModelArmor 出口防护盾：阻断未脱敏 PII 泄露与虚假绝对金融承诺"""
-        return self.model_armor.inspect_output(response_text)
+    def inspect_output(self, response_text: str) -> RuleVerdict:
+        """本地输出规则：拦截明文卡号/身份号、绝对金融承诺和 Markdown 外带。"""
+        return self.local_rules.inspect_output(response_text)
 
     def is_high_risk_write(self, tool_name: str, real_tool_name: str) -> bool:
         if real_tool_name in self.read_or_verify_tools or real_tool_name in STRICT_VERIFICATION_TOOLS:
@@ -220,12 +371,12 @@ class GuardEngine:
             return GuardDecision("block", real_name, real_args, "R01_UNWRAP_MALFORMED_DISPATCH", parse_err, err)
 
         normalized_payload = normalize_for_security_inspection(json.dumps(real_args, ensure_ascii=False))
-        armor_in = self.model_armor.inspect_input(normalized_payload)
-        if not armor_in.passed:
+        local_in = self.local_rules.inspect_input(normalized_payload)
+        if not local_in.passed:
             err = StructuredToolError(
-                error_type="guard_blocked", message=armor_in.reason, rule_id="R02_PROMPT_INJECTION_PAYLOAD"
+                error_type="guard_blocked", message=local_in.reason, rule_id="R02_PROMPT_INJECTION_PAYLOAD"
             )
-            return GuardDecision("block", real_name, real_args, "R02_PROMPT_INJECTION_PAYLOAD", armor_in.reason, err)
+            return GuardDecision("block", real_name, real_args, "R02_PROMPT_INJECTION_PAYLOAD", local_in.reason, err)
 
         for bad in self.blocked_substrings:
             if bad in normalized_payload:
@@ -246,15 +397,11 @@ class GuardEngine:
             )
             return GuardDecision("block", real_name, real_args, "R03_REQUIRE_UNLOCK_BEFORE_DISCOVERABLE_CALL", msg, err)
 
-        # R05: 动态 Schema 感知参数拦截（运行时前置拦截缺失必填参数）
-        if (
-            tool_name == "call_discoverable_agent_tool"
-            and real_name in sec_state.unlocked_schemas
-        ):
-            schema = sec_state.unlocked_schemas[real_name]
+        schema = sec_state.unlocked_schemas.get(real_name)
+        if schema is not None:
             missing = [
                 p for p in schema.required_params
-                if p not in real_args or real_args[p] is None or (isinstance(real_args[p], str) and not real_args[p].strip())
+                if p not in real_args or real_args[p] is None or (isinstance(real_args[p], str) and not str(real_args[p]).strip())
             ]
             if missing:
                 msg = (
@@ -268,6 +415,35 @@ class GuardEngine:
                     retryable=True,
                 )
                 return GuardDecision("block", real_name, real_args, "R05_DYNAMIC_SCHEMA_VALIDATION", msg, err)
+            for pname, expected in schema.parameters.items():
+                if pname not in real_args or real_args[pname] is None:
+                    continue
+                value = real_args[pname]
+                if not _value_matches_type(expected, value):
+                    msg = (
+                        f"Argument '{pname}' for unlocked tool '{real_name}' has invalid type "
+                        f"'{type(value).__name__}', expected {expected}."
+                    )
+                    err = StructuredToolError(
+                        error_type="invalid_arguments",
+                        message=msg,
+                        rule_id="R05_DYNAMIC_SCHEMA_VALIDATION",
+                        retryable=True,
+                    )
+                    return GuardDecision("block", real_name, real_args, "R05_DYNAMIC_SCHEMA_VALIDATION", msg, err)
+                allowed = schema.enums.get(pname)
+                if allowed is not None and value not in allowed:
+                    msg = (
+                        f"Argument '{pname}' for unlocked tool '{real_name}' has illegal enum value {value!r}. "
+                        f"Allowed: {allowed}."
+                    )
+                    err = StructuredToolError(
+                        error_type="invalid_arguments",
+                        message=msg,
+                        rule_id="R05_DYNAMIC_SCHEMA_VALIDATION",
+                        retryable=True,
+                    )
+                    return GuardDecision("block", real_name, real_args, "R05_DYNAMIC_SCHEMA_VALIDATION", msg, err)
 
         if self.is_high_risk_write(tool_name, real_name):
             if self.enforce_verification and not sec_state.verified:
@@ -294,6 +470,8 @@ class GuardEngine:
         sec_state: SecurityState,
         result_content: str | None = None,
     ) -> None:
+        if result_content is not None and not is_tool_result_success(result_content):
+            return
         real_name, real_args, _ = unwrap_tool_call(tool_name, raw_args)
         if tool_name == "unlock_discoverable_agent_tool":
             unlocked = str(
@@ -307,7 +485,9 @@ class GuardEngine:
                 if schema and schema.tool_name:
                     sec_state.unlocked_schemas[schema.tool_name] = schema
                     sec_state.unlocked_tools.add(schema.tool_name)
-        elif result_content and ("Tool unlocked:" in result_content or "Parameters:" in result_content):
+        elif result_content and (
+            "Tool unlocked:" in result_content or "Parameters:" in result_content or '"properties"' in result_content
+        ):
             schema = parse_unlocked_tool_schema(result_content)
             if schema and schema.tool_name:
                 sec_state.unlocked_schemas[schema.tool_name] = schema
