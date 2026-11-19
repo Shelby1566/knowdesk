@@ -9,18 +9,30 @@
     .box { flex: 1; overflow-y: auto; background: #1e293b; padding: 14px; border-radius: 8px; margin-bottom: 12px; }
     button { background: #3b82f6; color: #fff; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; margin-right: 6px; }
     button.reject { background: #ef4444; }
-    input { flex: 1; padding: 8px; border-radius: 6px; border: 1px solid #475569; background: #0f172a; color: #fff; }
+    button.modify { background: #d97706; }
+    input, textarea { padding: 8px; border-radius: 6px; border: 1px solid #475569; background: #0f172a; color: #fff; }
+    textarea { width: 100%; min-height: 72px; box-sizing: border-box; font-family: ui-monospace, monospace; }
     .span-item { border-left: 3px solid #38bdf8; padding-left: 10px; margin-bottom: 10px; font-size: 13px; }
+    .identity { display: flex; gap: 8px; margin-bottom: 8px; }
+    .identity input { flex: 1; }
   </style>
 </head>
 <body>
   <div class="col">
     <h3>KnowDesk Ticket Chat (SSE Stream + Guard Approval)</h3>
+    <div class="identity">
+      <input id="user-id" placeholder="X-User-Id" />
+      <input id="tenant-id" placeholder="X-Tenant-Id" />
+    </div>
     <div id="chat" class="box"></div>
     <div id="approval-bar" style="display:none; margin-bottom:10px;">
-      <span>High-Risk Write Intercepted by Guard: </span>
-      <button onclick="approve('approve')">Approve</button>
-      <button class="reject" onclick="approve('reject')">Reject</button>
+      <div>High-risk write is waiting for a supervisor. Idempotency key: <code id="idem-key"></code></div>
+      <textarea id="modify-args" spellcheck="false"></textarea>
+      <div style="margin-top:8px;">
+        <button onclick="approve('approve')">Approve</button>
+        <button class="modify" onclick="approve('modify')">Modify</button>
+        <button class="reject" onclick="approve('reject')">Reject</button>
+      </div>
     </div>
     <div style="display:flex; gap:8px;">
       <input id="msg" placeholder="e.g. Please freeze my lost credit card..." value="Please freeze my credit card immediately." />
@@ -33,71 +45,143 @@
   </div>
   <script>
     let sid = null;
+    let pendingIdemKey = null;
+
+    function identityHeaders() {
+      const headers = { 'Content-Type': 'application/json' };
+      const userId = document.getElementById('user-id').value.trim();
+      const tenantId = document.getElementById('tenant-id').value.trim();
+      if (userId) headers['X-User-Id'] = userId;
+      if (tenantId) headers['X-Tenant-Id'] = tenantId;
+      return headers;
+    }
+
     function appendMessage(role, text, color) {
       const chat = document.getElementById('chat');
       const row = document.createElement('div');
       if (color) row.style.color = color;
-      const b = document.createElement('b');
-      b.textContent = role + ': ';
-      const span = document.createElement('span');
-      span.textContent = text;
-      row.appendChild(b);
-      row.appendChild(span);
+      const label = document.createElement('b');
+      label.textContent = role + ': ';
+      const body = document.createElement('span');
+      body.textContent = text;
+      row.appendChild(label);
+      row.appendChild(body);
       chat.appendChild(row);
+      chat.scrollTop = chat.scrollHeight;
     }
+
+    function handleSseBlock(block) {
+      const dataLine = block.split('\n').find(line => line.startsWith('data: '));
+      if (!dataLine) return;
+      const payload = JSON.parse(dataLine.slice(6));
+      if (payload.event === 'node_transition') {
+        const div = document.createElement('div');
+        div.className = 'span-item';
+        div.textContent = `⚡ [Node] ${payload.node} (in-progress)`;
+        document.getElementById('trace').appendChild(div);
+      } else if (payload.event === 'awaiting_approval') {
+        const pending = payload.pending_tool_call || {};
+        pendingIdemKey = pending.idem_key || null;
+        document.getElementById('idem-key').textContent = pendingIdemKey || '(missing)';
+        const args = pending.real_args || pending.arguments || {};
+        document.getElementById('modify-args').value = JSON.stringify(args, null, 2);
+        appendMessage('Guard', 'Paused at human_confirm. The approval button uses the server idempotency key.', '#fbbf24');
+        document.getElementById('approval-bar').style.display = 'block';
+      } else if (payload.event === 'done') {
+        appendMessage('Agent', payload.reply || '');
+      }
+    }
+
+    async function readSse(resp) {
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let splitAt = buffer.indexOf('\n\n');
+        while (splitAt !== -1) {
+          const block = buffer.slice(0, splitAt);
+          buffer = buffer.slice(splitAt + 2);
+          if (block.trim()) handleSseBlock(block);
+          splitAt = buffer.indexOf('\n\n');
+        }
+      }
+      buffer += decoder.decode();
+      if (buffer.trim()) handleSseBlock(buffer);
+    }
+
     async function init() {
-      const r = await fetch('/sessions', {method:'POST'});
-      const d = await r.json();
-      sid = d.session_id;
+      const response = await fetch('/sessions', { method: 'POST', headers: identityHeaders() });
+      const payload = await response.json();
+      sid = payload.session_id;
+      appendMessage('System', 'Session ' + sid + ' verified=' + payload.verified);
     }
+
     async function send() {
       if (!sid) await init();
       const text = document.getElementById('msg').value;
       appendMessage('User', text);
       const resp = await fetch(`/sessions/${sid}/messages`, {
-        method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({content:text})
+        method: 'POST',
+        headers: identityHeaders(),
+        body: JSON.stringify({ content: text })
       });
-      const raw = await resp.text();
-      for (const block of raw.split('\n\n')) {
-        const dataLine = block.split('\n').find(l => l.startsWith('data: '));
-        if (!dataLine) continue;
-        const payload = JSON.parse(dataLine.slice(6));
-        if (payload.event === 'node_transition') {
-          const div = document.createElement('div');
-          div.className = 'span-item';
-          div.textContent = `⚡ [Node] ${payload.node} (in-progress)`;
-          document.getElementById('trace').appendChild(div);
-        } else if (payload.event === 'awaiting_approval') {
-          appendMessage('Guard', 'Paused at human_confirm node awaiting supervisor approval.', '#fbbf24');
-          document.getElementById('approval-bar').style.display = 'block';
-        } else if (payload.event === 'done') {
-          appendMessage('Agent', payload.reply || '');
+      await readSse(resp);
+      await loadTrace();
+    }
+
+    async function approve(decision) {
+      if (!pendingIdemKey) {
+        appendMessage('Guard', 'No pending idempotency key from the server.', '#f87171');
+        return;
+      }
+      let modified = null;
+      if (decision === 'modify') {
+        try {
+          modified = JSON.parse(document.getElementById('modify-args').value || '{}');
+        } catch (err) {
+          appendMessage('Guard', 'Parameter JSON is invalid: ' + err.message, '#f87171');
+          return;
         }
       }
-      await loadTrace();
-    }
-    async function approve(decision) {
-      const r = await fetch(`/sessions/${sid}/approvals`, {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({decision, reason:'Supervisor action', idempotency_key: 'ui_' + Date.now()})
+      const headers = identityHeaders();
+      headers['X-Role'] = 'supervisor';
+      const response = await fetch(`/sessions/${sid}/approvals`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          decision,
+          reason: 'Supervisor action',
+          modified_args: modified,
+          idempotency_key: pendingIdemKey
+        })
       });
-      const d = await r.json();
+      const payload = await response.json();
       document.getElementById('approval-bar').style.display = 'none';
-      appendMessage(`Agent (${decision})`, d.reply || '');
+      pendingIdemKey = null;
+      if (!response.ok) {
+        appendMessage('Guard', JSON.stringify(payload.detail || payload), '#f87171');
+        return;
+      }
+      appendMessage(`Agent (${decision})`, payload.reply || '');
       await loadTrace();
     }
+
     async function loadTrace() {
-      const r = await fetch(`/sessions/${sid}/trace`);
-      const d = await r.json();
+      const response = await fetch(`/sessions/${sid}/trace`, { headers: identityHeaders() });
+      const payload = await response.json();
       const traceBox = document.getElementById('trace');
       traceBox.textContent = '';
-      for (const s of d.spans) {
+      for (const span of payload.spans || []) {
         const div = document.createElement('div');
         div.className = 'span-item';
-        div.textContent = `${s.name} (${s.duration_ms} ms) - ${JSON.stringify(s.attributes)}`;
+        div.textContent = `${span.name} (${span.duration_ms} ms) - ${JSON.stringify(span.attributes)}`;
         traceBox.appendChild(div);
       }
     }
+
     init();
   </script>
 </body>

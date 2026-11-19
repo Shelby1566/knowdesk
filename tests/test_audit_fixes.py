@@ -48,9 +48,9 @@ def test_p0_2_cjk_multilingual_tokenization_and_bm25():
     res = idx.search("信用卡年费", k=1)
     assert res[0][0] == "d1" and res[0][1] > 0
 
-def test_p0_3_mcp_client_inside_running_async_loop():
+def test_p0_3_mcp_client_inside_running_async_loop(tmp_path):
     """验证在运行中的 asyncio 事件循环（如 FastAPI async 路由）内调用 MCPToolBackend 不崩溃"""
-    backend = MCPToolBackend()
+    backend = MCPToolBackend(db_path=tmp_path / "async_mcp.sqlite")
     backend.init_session("async_s1")
 
     async def _inside_loop():

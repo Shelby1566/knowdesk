@@ -15,9 +15,9 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@v4
 
-      - name: Install dependencies and run all 24 unit tests
+      - name: Install dependencies and run unit tests
         run: |
           uv venv --python 3.12
           uv pip install --extra-index-url https://download.pytorch.org/whl/cpu torch
-          uv pip install -e "../tau2-bench[knowledge]" faiss-cpu sentence-transformers "langgraph>=1.2.12,<2" "langgraph-checkpoint-sqlite>=3.0.0" "mcp>=2.0.0,<3" pytest httpx
+          uv pip install -e "../tau2-bench[knowledge]" faiss-cpu sentence-transformers "langgraph>=1.2.12,<2" "langgraph-checkpoint-sqlite>=3.0.0" "mcp>=2.0.0,<3" fastapi uvicorn litellm pydantic pyyaml rank-bm25 python-dotenv numpy jsonschema httpx opentelemetry-sdk opentelemetry-exporter-otlp-proto-http pytest
           uv run --no-sync pytest -v -W ignore

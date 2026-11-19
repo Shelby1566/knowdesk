@@ -1,14 +1,46 @@
+import json
 from pathlib import Path
+
 from fastapi.testclient import TestClient
+
 from service.app import create_knowdesk_app
+
+
+def _scripted_llm():
+    def llm(messages):
+        tool_messages = [message for message in messages if message.get("role") == "tool"]
+        verified = any('"verified": true' in str(message.get("content", "")).lower() or '"verified":true' in str(message.get("content", "")).lower() for message in tool_messages)
+        froze = any(message.get("name") == "freeze_card" for message in tool_messages)
+        if not verified:
+            return {
+                "content": "",
+                "tool_calls": [{"id": "tc_verify", "name": "get_user_details", "arguments": {"user_id": "u_01"}}],
+            }
+        if not froze:
+            return {
+                "content": "",
+                "tool_calls": [{"id": "tc_freeze", "name": "freeze_card", "arguments": {"card_id": "card_5320"}}],
+            }
+        return {"content": "The card freeze has been submitted.", "tool_calls": []}
+
+    return llm
+
+
+def _pending_idempotency_key(sse_text: str) -> str:
+    for block in sse_text.split("\n\n"):
+        for line in block.split("\n"):
+            if not line.startswith("data: "):
+                continue
+            payload = json.loads(line[6:])
+            if payload.get("event") == "awaiting_approval":
+                return payload["pending_tool_call"]["idem_key"]
+    raise AssertionError("awaiting_approval event did not include pending_tool_call.idem_key")
+
 
 def test_m25_full_sse_approval_idempotency_and_sqlite_restart(tmp_path: Path):
     """
-    M25 Test case: 
-    ① 新建会话 -> 发消息触发 SSE awaiting_approval -> 审批恢复完成闭环
-    ② 同一审批幂等键重复提交两次，底层写操作只执行 1 次
-    ③ 服务重启（新建 App 实例连接同一 SQLite 文件），原 session_id 状态完整恢复并可继续审批
-    ④ 不存在的 session 返回 404 与结构化错误
+    新建会话默认未核身。核身工具成功后，高风险写操作进入人工审批。
+    审批必须携带监督员角色和挂起调用的 idem_key。同一 SQLite 上的新进程重复提交不再次写库。
     """
     db_file = tmp_path / "knowdesk_ckpt.sqlite"
     write_counter = 0
@@ -18,38 +50,42 @@ def test_m25_full_sse_approval_idempotency_and_sqlite_restart(tmp_path: Path):
         write_counter += 1
         return {"frozen": args.get("card_id")}
 
-    app1 = create_knowdesk_app(db_path=db_file, tool_funcs={"freeze_card": counting_freeze})
+    tools = {
+        "get_user_details": lambda args: {"user_id": args.get("user_id", "u_01"), "verified": True, "name": "Sera Chen"},
+        "freeze_card": counting_freeze,
+    }
+    app1 = create_knowdesk_app(db_path=db_file, llm_fn=_scripted_llm(), tool_funcs=tools)
     client1 = TestClient(app1)
 
-    # ④ 不存在的会话返回 404
-    r_404 = client1.get("/sessions/non_existent/trace")
-    assert r_404.status_code == 404
+    missing = client1.get("/sessions/non_existent/trace")
+    assert missing.status_code == 404
 
-    # ① 新建会话并发送高风险冻结请求 -> 收到 SSE awaiting_approval 事件，此时写操作计数为 0
-    sid = client1.post("/sessions").json()["session_id"]
-    sse_resp = client1.post(f"/sessions/{sid}/messages", json={"content": "Please freeze my card"})
+    created = client1.post("/sessions?verified=true")
+    assert created.status_code == 200
+    assert created.json()["verified"] is False
+    session_id = created.json()["session_id"]
+
+    sse_resp = client1.post(f"/sessions/{session_id}/messages", json={"content": "Please freeze my card"})
     assert sse_resp.status_code == 200
     assert "event: awaiting_approval" in sse_resp.text
     assert write_counter == 0
+    idem_key = _pending_idempotency_key(sse_resp.text)
 
-    # ③ 模拟服务进程重启：销毁 app1，用同一个 SQLite 文件创建全新 app2 实例！
-    app2 = create_knowdesk_app(db_path=db_file, tool_funcs={"freeze_card": counting_freeze})
+    app2 = create_knowdesk_app(db_path=db_file, llm_fn=_scripted_llm(), tool_funcs=tools)
     client2 = TestClient(app2)
-
-    # 在重启后的新服务实例上直接对旧 session_id 提交审批 -> 成功恢复并执行写操作！
-    app_req = {"decision": "approve", "reason": "verified", "idempotency_key": "idem_001"}
-    res1 = client2.post(f"/sessions/{sid}/approvals", json=app_req)
-    assert res1.status_code == 200
-    assert res1.json()["status"] == "resumed"
+    approval = {"decision": "approve", "reason": "verified", "idempotency_key": idem_key}
+    headers = {"X-Role": "supervisor"}
+    first = client2.post(f"/sessions/{session_id}/approvals", json=approval, headers=headers)
+    assert first.status_code == 200
+    assert first.json()["status"] == "resumed"
     assert write_counter == 1
 
-    # ② 同一审批重复提交第二次 -> 幂等直接返回首次结果，底层写操作依然只执行了 1 次！
-    res2 = client2.post(f"/sessions/{sid}/approvals", json=app_req)
-    assert res2.status_code == 200
+    second = client2.post(f"/sessions/{session_id}/approvals", json=approval, headers=headers)
+    assert second.status_code == 200
+    assert second.json()["reply"] == first.json()["reply"]
     assert write_counter == 1
 
-    # 检查 /trace 与 /metrics
-    tr = client2.get(f"/sessions/{sid}/trace").json()
-    assert len(tr["spans"]) >= 1
+    trace = client2.get(f"/sessions/{session_id}/trace").json()
+    assert len(trace["spans"]) >= 1
     metrics = client2.get("/metrics").json()
     assert metrics["sessions_count"] >= 1

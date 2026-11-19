@@ -9,12 +9,25 @@ authors = [
 requires-python = ">=3.12"
 dependencies = [
     "faiss-cpu>=1.16.0",
+    "fastapi",
+    "httpx",
+    "jsonschema",
     "langgraph>=1.2.12,<2",
     "langgraph-checkpoint-sqlite>=3.0.0",
+    "litellm",
     "mcp>=2.0.0,<3",
+    "numpy",
+    "opentelemetry-exporter-otlp-proto-http",
+    "opentelemetry-sdk",
+    "pydantic",
     "pytest>=9.2.0",
+    "python-dotenv",
+    "pyyaml",
+    "rank-bm25",
     "sentence-transformers>=6.3.0",
     "tau2[knowledge]",
+    "torch",
+    "uvicorn",
 ]
 
 [project.scripts]
@@ -23,6 +36,23 @@ knowdesk = "knowdesk:main"
 [build-system]
 requires = ["uv_build>=0.13.7,<0.14.0"]
 build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-root = ""
+module-name = [
+    "kb",
+    "agent",
+    "plain",
+    "tools",
+    "adapters",
+    "obs",
+    "service",
+    "eval",
+    "mcp_server",
+    "mcp_client",
+    "security",
+    "knowdesk",
+]
 
 [tool.uv.sources]
 tau2 = { path = "../tau2-bench", editable = true }

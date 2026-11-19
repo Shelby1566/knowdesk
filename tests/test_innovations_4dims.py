@@ -109,7 +109,11 @@ def test_dim3_adaptive_margin_aware_rrf_math():
 def test_dim4_graph_stream_node_transitions_sse(tmp_path: Path):
     """维度四【工程深度】：验证 graph.stream 节点级实时事件流 SSE 协议"""
     db_file = tmp_path / "stream_ckpt.sqlite"
-    app = create_knowdesk_app(db_path=db_file)
+
+    def offline_llm(messages):
+        return {"content": "Your request has been processed according to bank policy.", "tool_calls": []}
+
+    app = create_knowdesk_app(db_path=db_file, llm_fn=offline_llm, tool_funcs={})
     client = TestClient(app)
 
     sid = client.post("/sessions").json()["session_id"]

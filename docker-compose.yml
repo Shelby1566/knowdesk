@@ -5,7 +5,10 @@ services:
       - "8000:8000"
     environment:
       - KNOWDESK_CHECKPOINTER_BACKEND=sqlite
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
+      - KNOWDESK_DB_PATH=/app/data/knowdesk.sqlite
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318/v1/traces
+    volumes:
+      - ./data:/app/data
     env_file:
       - .env.example
     depends_on:

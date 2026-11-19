@@ -1,8 +1,21 @@
+"""MCP tool backend.
+
+Calls go through the official MCP Python SDK ``Client`` over the in-memory
+JSON-RPC transport (``mode="legacy"``). The default ``mode="auto"`` path for an
+in-process server skips JSON-RPC framing, so it is not used here.
+"""
+
+from __future__ import annotations
+
 import asyncio
 import concurrent.futures
 import json
 from typing import Any
+
+from mcp import Client
+
 from mcp_server.server import SessionEnvironmentManager, create_knowdesk_mcp_server
+
 
 def _run_coroutine_sync(coro):
     try:
@@ -12,26 +25,56 @@ def _run_coroutine_sync(coro):
 
     if loop is None or not loop.is_running():
         return asyncio.run(coro)
-    else:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-            return pool.submit(asyncio.run, coro).result()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, coro).result()
+
+
+def _tool_result_text(result: Any) -> str:
+    content_list = getattr(result, "content", None)
+    if content_list is None and isinstance(result, tuple) and len(result) > 0:
+        content_list = result[0]
+    if content_list is None and isinstance(result, list):
+        content_list = result
+    if content_list and len(content_list) > 0:
+        first = content_list[0]
+        return getattr(first, "text", str(first))
+    structured = getattr(result, "structuredContent", None)
+    if structured is not None:
+        return json.dumps(structured, ensure_ascii=False)
+    return str(result)
+
 
 class MCPToolBackend:
-    """M36: 基于 MCP Python SDK v2 的工具执行后端（plain 与 LangGraph 服务模式共用）"""
-    def __init__(self, env_manager: SessionEnvironmentManager | None = None):
-        self.mcp_server, self.env_manager = create_knowdesk_mcp_server(env_manager)
+    """Plain 与 LangGraph 服务共用的 MCP 工具后端。"""
+
+    def __init__(
+        self,
+        env_manager: SessionEnvironmentManager | None = None,
+        *,
+        db_path: str | os.PathLike[str] | None = None,
+        env_factory: Any = None,
+        server_url: str | None = None,
+    ):
+        self.env_manager = env_manager
+        self.server_url = server_url
+        self.mcp_server = None
+        if server_url is None:
+            self.mcp_server, self.env_manager = create_knowdesk_mcp_server(
+                env_manager, db_path=db_path, env_factory=env_factory
+            )
+        elif self.env_manager is None:
+            self.env_manager = SessionEnvironmentManager(db_path=db_path, env_factory=env_factory)
+
+    def _client(self) -> Client:
+        if self.server_url:
+            return Client(self.server_url)
+        # legacy: InMemoryTransport + JSONRPCDispatcher. auto would skip JSON-RPC.
+        return Client(self.mcp_server, mode="legacy")
 
     async def _invoke_mcp_tool(self, name: str, arguments: dict[str, Any]) -> str:
-        res = await self.mcp_server.call_tool(name, arguments)
-        content_list = getattr(res, "content", None)
-        if content_list is None and isinstance(res, tuple) and len(res) > 0:
-            content_list = res[0]
-        if content_list is None and isinstance(res, list):
-            content_list = res
-        if content_list and len(content_list) > 0:
-            first = content_list[0]
-            return getattr(first, "text", str(first))
-        return str(res)
+        async with self._client() as client:
+            result = await client.call_tool(name, arguments)
+        return _tool_result_text(result)
 
     def init_session(self, session_id: str, initial_state: Any = None) -> None:
         self.env_manager.get_or_create_env(session_id, initial_state=initial_state)

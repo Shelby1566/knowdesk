@@ -12,6 +12,16 @@ _RE_ADDRESS = re.compile(
     re.IGNORECASE,
 )
 
+
+def redact_text(text: str) -> str:
+    """不可逆掩码：16 位卡号、SSN、手机号、邮箱。地址与令牌由保险库另处理。"""
+    value = str(text)
+    value = _RE_CARD.sub(r"****-****-****-\1", value)
+    value = _RE_SSN.sub(r"***-**-\1", value)
+    value = _RE_PHONE.sub(r"\1-***-\2", value)
+    value = _RE_EMAIL.sub(r"\1***@\2", value)
+    return value
+
 class SensitiveDataVault:
     """
     企业级可逆敏感数据保险库 (Google Cloud DLP / Sensitive Data Protection Pattern):
@@ -94,11 +104,7 @@ class SensitiveDataVault:
 
     def redact_irreversible(self, text: str) -> str:
         """不可逆脱敏（专供公开日志、OTel Span 与外部报表）"""
-        s = str(text)
-        s = _RE_CARD.sub(r"****-****-****-\1", s)
-        s = _RE_SSN.sub(r"***-**-\1", s)
-        s = _RE_PHONE.sub(r"\1-***-\2", s)
-        s = _RE_EMAIL.sub(r"\1***@\2", s)
+        s = redact_text(text)
         s = _RE_ADDRESS.sub(r"[REDACTED_STREET_ADDRESS]", s)
         # 顺便抹掉可能存在的令牌
         for tok in list(self.token_to_raw.keys()):
