@@ -27,7 +27,7 @@ def test_matched_section_is_not_the_full_document():
     retriever = KnowDeskHybridRetriever.__new__(KnowDeskHybridRetriever)
     retriever.doc_map = {"card_1": Document("card_1", "Diamond Elite", full, "card")}
     retriever.doc_acl = {}
-    retriever.search_chunks = lambda *args, **kwargs: [(chunk, 0.91)]
+    retriever.rank_documents = lambda *args, **kwargs: [("card_1", 0.91, chunk)]
     hits = retriever.search_sections("annual fee", k=3)
     assert hits[0]["id"] == "card_1"
     assert hits[0]["chunk_id"] == "card_1#2"

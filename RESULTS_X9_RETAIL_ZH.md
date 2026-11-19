@@ -1,6 +1,4 @@
-# X9 中文第二域 (`retail --language zh`) 迁移评测结果 (n=10, 模型: `dashscope/qwen3.8-flash`)
+# X9
 
-| 配置 | DB 终态通过率 (Pass^1) | 平均交互步数 |
-|---|---:|---:|
-| 1. τ原生基线 (`llm_agent`) | 0.7000 | 34.3 |
-| 2. KnowDesk-LangGraph (`knowdesk_graph` + Guard) | 0.5000 | 28.1 |
+此前 n=10 的中文零售通过率已撤回。
+全量前 50 单还没有在百炼 NL 裁判下跑完，本文件不填写 Pass^1。

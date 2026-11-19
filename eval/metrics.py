@@ -75,11 +75,51 @@ def compute_online_doc_recall(
 
     return len(retrieved & gold_set) / len(gold_set)
 
-def summarize_simulation_file(results_json_path: Path) -> dict[str, float]:
+def message_usage(message: dict[str, Any]) -> dict[str, Any]:
+    """Read provider usage. Cached tokens stay absent when the API did not report them."""
+    usage = dict(message.get("usage") or {})
+    raw_usage = ((message.get("raw_data") or {}).get("usage") or {})
+    if not isinstance(raw_usage, dict):
+        raw_usage = {}
+    if usage.get("prompt_tokens") is None and raw_usage.get("prompt_tokens") is not None:
+        usage["prompt_tokens"] = raw_usage["prompt_tokens"]
+    if usage.get("completion_tokens") is None and raw_usage.get("completion_tokens") is not None:
+        usage["completion_tokens"] = raw_usage["completion_tokens"]
+    if usage.get("cached_tokens") is None:
+        details = raw_usage.get("prompt_tokens_details") or {}
+        if isinstance(details, dict) and details.get("cached_tokens") is not None:
+            usage["cached_tokens"] = details["cached_tokens"]
+    return usage
+
+
+def _require_reward(sim: dict[str, Any]) -> float:
+    info = sim.get("reward_info")
+    if not isinstance(info, dict) or info.get("reward") is None:
+        raise RuntimeError(f"simulation {sim.get('task_id')} has no numeric reward")
+    return float(info["reward"])
+
+
+def rewards_for_tasks(results_json_path: Path, task_ids: list[str]) -> list[float]:
+    """One mean reward per requested task. A missing task is an error, not a zero."""
+    if not results_json_path.exists():
+        raise FileNotFoundError(results_json_path)
+    data = json.loads(results_json_path.read_text(encoding="utf-8"))
+    grouped: dict[str, list[float]] = {}
+    for sim in data.get("simulations", []):
+        grouped.setdefault(str(sim.get("task_id")), []).append(_require_reward(sim))
+    missing = [task_id for task_id in task_ids if task_id not in grouped]
+    if missing:
+        raise RuntimeError(f"{results_json_path} is missing tasks: {missing[:8]}")
+    return [sum(grouped[task_id]) / len(grouped[task_id]) for task_id in task_ids]
+
+
+def summarize_simulation_file(results_json_path: Path, *, strict: bool = True) -> dict[str, float | int | None]:
+    if not results_json_path.exists():
+        raise FileNotFoundError(results_json_path)
     data = json.loads(results_json_path.read_text(encoding="utf-8"))
     sims = data.get("simulations", [])
     if not sims:
-        return {}
+        raise RuntimeError(f"{results_json_path} has no simulations")
 
     tasks_map = load_tasks_map()
     docs = load_documents()
@@ -92,42 +132,79 @@ def summarize_simulation_file(results_json_path: Path) -> dict[str, float]:
     doc_recalls: list[float] = []
     in_tokens: list[int] = []
     out_tokens: list[int] = []
-    turns_list: list[int] = []
+    cached_tokens: list[int] = []
+    prompt_for_cache: list[int] = []
+    message_counts: list[int] = []
+    llm_call_counts: list[int] = []
+    infra_errors = 0
+    cache_observations = 0
 
     for sim in sims:
+        reason = str(sim.get("termination_reason") or "")
+        if reason in {"infrastructure_error", "unexpected_error"}:
+            infra_errors += 1
+        if strict and (reason in {"infrastructure_error", "unexpected_error"} or not isinstance(sim.get("reward_info"), dict)):
+            raise RuntimeError(
+                f"{results_json_path} task {sim.get('task_id')} ended with {reason or 'missing reward'}"
+            )
+        if not isinstance(sim.get("reward_info"), dict) or sim["reward_info"].get("reward") is None:
+            continue
+        rewards.append(float(sim["reward_info"]["reward"]))
+
+        msgs = sim.get("messages") or []
+        message_counts.append(len(msgs))
+        assistant_msgs = [m for m in msgs if m.get("role") == "assistant"]
+        llm_call_counts.append(len(assistant_msgs))
+        prompt_sum = 0
+        completion_sum = 0
+        for message in assistant_msgs:
+            usage = message_usage(message)
+            if usage.get("prompt_tokens") is None:
+                continue
+            prompt = int(usage["prompt_tokens"])
+            prompt_sum += prompt
+            completion_sum += int(usage.get("completion_tokens") or 0)
+            if usage.get("cached_tokens") is not None:
+                cached_tokens.append(int(usage["cached_tokens"]))
+                prompt_for_cache.append(prompt)
+                cache_observations += 1
+        in_tokens.append(prompt_sum)
+        out_tokens.append(completion_sum)
+
         tid = str(sim.get("task_id", ""))
-        rew = float((sim.get("reward_info") or {}).get("reward", 0.0))
-        rewards.append(rew)
-
-        msgs = sim.get("messages", [])
-        turns_list.append(len(msgs))
-        in_tokens.append(sum((m.get("usage") or {}).get("prompt_tokens", 0) for m in msgs))
-        out_tokens.append(sum((m.get("usage") or {}).get("completion_tokens", 0) for m in msgs))
-
         task_obj = tasks_map.get(tid, {})
         gold_acts = task_obj.get("evaluation_criteria", {}).get("actions", [])
         req_docs = task_obj.get("required_documents", [])
-
         nr, er = compute_action_recall(msgs, gold_acts)
         dr = compute_online_doc_recall(msgs, req_docs, all_doc_ids, title_to_id)
         act_name_recalls.append(nr)
         act_exact_recalls.append(er)
         doc_recalls.append(dr)
 
-    n = len(sims)
+    if not rewards:
+        raise RuntimeError(f"{results_json_path} has no scored simulations")
+    n = len(rewards)
     avg_in = sum(in_tokens) / n
     avg_out = sum(out_tokens) / n
-    # 按 qwen3.8-flash 定价 (输入 0.8元/M, 输出 2.7元/M) 估算单任务人民币成本
+    # qwen3.8-flash card registered in the adapter: 0.8 RMB / M input, 2.7 RMB / M output.
     avg_cost_rmb = (avg_in * 0.8 + avg_out * 2.7) / 1e6
+    cache_hit_rate = None
+    if cache_observations and sum(prompt_for_cache) > 0:
+        cache_hit_rate = sum(cached_tokens) / sum(prompt_for_cache)
 
     return {
         "n": n,
+        "infra_errors": infra_errors,
         "pass_1": sum(rewards) / n,
         "action_name_recall": sum(act_name_recalls) / n,
         "action_exact_recall": sum(act_exact_recalls) / n,
         "online_doc_recall": sum(doc_recalls) / n,
-        "avg_turns": sum(turns_list) / n,
+        "avg_messages": sum(message_counts) / n,
+        "avg_llm_calls": sum(llm_call_counts) / n,
+        "avg_turns": sum(message_counts) / n,
         "avg_in_tokens": avg_in,
         "avg_out_tokens": avg_out,
+        "avg_cached_tokens": (sum(cached_tokens) / cache_observations) if cache_observations else None,
+        "cache_hit_rate": cache_hit_rate,
         "avg_cost_rmb": avg_cost_rmb,
     }

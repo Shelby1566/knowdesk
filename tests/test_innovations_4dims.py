@@ -6,26 +6,13 @@ from kb.fusion import adaptive_rrf_fusion, calculate_distribution_margin
 from service.app import create_knowdesk_app
 
 def test_dim1_honest_online_replay_and_judge_calibration():
-    """维度一【诚实度防线】：验证 54 条真实轨迹裁判落盘数据与消融实验指标"""
-    runs_file = Path("eval/data/faithfulness_judge_runs.json")
-    assert runs_file.exists(), "faithfulness_judge_runs.json 必须落盘存在"
-    data = json.loads(runs_file.read_text(encoding="utf-8"))
-    metrics = data["metrics"]
-    runs = data["runs"]
-
-    assert len(runs) == 54
-    assert metrics["n"] == 54
-    assert metrics["p_o"] > 0.90
-    assert metrics["kappa"] > 0.80
-    assert "faithful" in metrics["confusion_matrix"]
-    assert "unfaithful" in metrics["confusion_matrix"]
-
+    """The archived n=10 trace stays on disk. It is not a dev-30 result, and the old synthetic judge file is not required."""
     sim_file = Path("eval/data/simulations/x2_dev10_lite_4_graph_hybrid/results.json")
     assert sim_file.exists(), "真实 10 条模拟工单轨迹 results.json 必须本地存在"
     sims = json.loads(sim_file.read_text(encoding="utf-8")).get("simulations", [])
     assert len(sims) == 10
-    rewards = [s.get("reward_info", {}).get("reward", 0.0) for s in sims]
-    pass_rate = sum(1 for r in rewards if r >= 1.0) / len(rewards)
+    rewards = [s["reward_info"]["reward"] for s in sims]
+    pass_rate = sum(1 for reward in rewards if reward >= 1.0) / len(rewards)
     assert abs(pass_rate - 0.40) < 1e-4
 
 def test_dim2_dynamic_unlocked_schema_guard_missing_args():

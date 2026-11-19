@@ -1,0 +1,11 @@
+{
+  "fusion_mode": "rrf",
+  "temperature": 1.0,
+  "rrf_k": 60,
+  "alpha": 0.5,
+  "beta": 0.15,
+  "use_intent_boost": true,
+  "dense_model": "Qwen/Qwen3-Embedding-0.6B",
+  "candidate_k": 50,
+  "selected_on": "dev_colloquial"
+}

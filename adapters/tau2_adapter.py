@@ -14,6 +14,7 @@ from tau2.data_model.message import AssistantMessage, MultiToolMessage, SystemMe
 from tau2.knowledge.retrievers.bm25_retriever import BM25Retriever
 from tau2.registry import registry
 
+from agent.context import compress_context_watermark
 from agent.guard import GuardEngine, SecurityState
 from agent.workflow import stage_directive
 from kb.hybrid_retriever import KnowDeskHybridRetriever
@@ -126,9 +127,48 @@ def _with_stage_directive(messages: list[Any], directive: str) -> list[Any]:
     return [SystemMessage(role="system", content=directive), *messages]
 
 
+def _compact_llm_view(messages: list[Any]) -> list[Any]:
+    """Compress only the copy sent to the model. The stored trajectory stays intact."""
+    if os.getenv("KNOWDESK_COMPACTION", "0") != "1":
+        return messages
+    as_dicts: list[dict[str, Any]] = []
+    for message in messages:
+        if isinstance(message, dict):
+            as_dicts.append(dict(message))
+            continue
+        role = str(getattr(message, "role", "") or "")
+        as_dicts.append({
+            "role": role,
+            "content": getattr(message, "content", "") or "",
+            "id": getattr(message, "id", None),
+            "tool_call_id": getattr(message, "id", None) if role == "tool" else None,
+        })
+    compacted, changed = compress_context_watermark(as_dicts)
+    if not changed:
+        return messages
+    rewritten: list[Any] = []
+    for original, updated in zip(messages, compacted, strict=True):
+        new_content = updated.get("content", "")
+        old_content = original.get("content", "") if isinstance(original, dict) else (getattr(original, "content", "") or "")
+        if new_content == old_content:
+            rewritten.append(original)
+            continue
+        if isinstance(original, dict):
+            copied = dict(original)
+            copied["content"] = new_content
+            rewritten.append(copied)
+        else:
+            rewritten.append(original.model_copy(update={"content": new_content}))
+    return rewritten
+
+
 def _model_turn(agent: Any, messages: list[Any]) -> Any:
     return generate(
-        model=agent.llm, tools=agent.tools, messages=messages, call_name="agent_response", **agent.llm_args
+        model=agent.llm,
+        tools=agent.tools,
+        messages=_compact_llm_view(messages),
+        call_name="agent_response",
+        **agent.llm_args,
     )
 
 

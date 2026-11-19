@@ -1,82 +1,247 @@
-import builtins
+"""Chinese retail, first 50 tasks, with the NL assertion judge pointed at Bailian.
+
+DB match and NL assertion are reported separately from the combined reward.
+Infrastructure errors are written into the report and then raised.
+"""
+
+from __future__ import annotations
+
 import json
-import os
 import sys
 from pathlib import Path
-from dotenv import load_dotenv
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-load_dotenv(Path(__file__).resolve().parents[2] / "tau2-bench/.env", override=True)
-os.environ.setdefault("LITELLM_LOCAL_MODEL_COST_MAP", "True")
-builtins.input = lambda *args, **kwargs: "y"
 
-from adapters.tau2_adapter import register_knowdesk_components
-from tau2.cli import main as tau2_cli_main
+from eval.manifest import write_manifest
+from eval.tau_runner import (
+    DEFAULT_LLM_ARGS,
+    DEFAULT_MODEL,
+    INFRA_REASONS,
+    TAU_ROOT,
+    run_tau,
+    signed_results_path,
+)
 
-SIM_ROOT = Path(__file__).resolve().parents[2] / "tau2-bench/data/simulations"
-REPORT_X9_PATH = Path(__file__).resolve().parents[1] / "RESULTS_X9_RETAIL_ZH.md"
-MODEL_NAME = os.getenv("KNOWDESK_MODEL", "dashscope/qwen3.8-flash")
+ROOT = Path(__file__).resolve().parents[1]
+REPORT_PATH = ROOT / "RESULTS_X9_RETAIL_ZH.md"
+TASKS_PATH = TAU_ROOT / "data" / "tau2" / "domains" / "retail" / "tasks.json"
+RETAIL_MAX_STEPS = 50
+SEED = 42
 
-def run_retail_zh(save_name: str, agent_name: str, num_tasks: int = 10) -> Path:
-    res_file = SIM_ROOT / save_name / "results.json"
-    if res_file.exists():
+
+def retail_task_ids() -> list[str]:
+    if not TASKS_PATH.exists():
+        raise FileNotFoundError(TASKS_PATH)
+    tasks = json.loads(TASKS_PATH.read_text(encoding="utf-8"))
+    ids = [str(task["id"]) for task in tasks[:50]]
+    if len(ids) != 50:
+        raise RuntimeError(f"retail tasks file has only {len(ids)} tasks in the first slice")
+    if len(set(ids)) != 50:
+        raise RuntimeError("the first 50 retail task ids are not unique")
+    return ids
+
+
+def _component(simulation: dict[str, Any], key: str) -> float | None:
+    info = simulation.get("reward_info") or {}
+    if key == "DB":
+        db_check = info.get("db_check") or {}
+        if db_check.get("db_reward") is not None:
+            return float(db_check["db_reward"])
+    breakdown = info.get("reward_breakdown") or {}
+    if key in breakdown and breakdown[key] is not None:
+        return float(breakdown[key])
+    return None
+
+
+def _guard_refusal(simulation: dict[str, Any]) -> bool:
+    for message in simulation.get("messages") or []:
+        content = str(message.get("content") or "")
+        if "guard_blocked" in content or "R02_" in content or "R03_" in content or "R04_" in content or "R05_" in content:
+            return True
+    return False
+
+
+def _summarize(path: Path, task_ids: list[str]) -> dict[str, Any]:
+    data = json.loads(path.read_text(encoding="utf-8"))
+    by_id = {str(item.get("task_id")): item for item in data.get("simulations") or []}
+    missing = [task_id for task_id in task_ids if task_id not in by_id]
+    rewards = []
+    db_scores = []
+    nl_scores = []
+    buckets: dict[str, list[str]] = {
+        "infrastructure_error": [],
+        "missing_reward": [],
+        "max_steps": [],
+        "db_mismatch": [],
+        "nl_fail": [],
+        "guard_refusal": [],
+        "success": [],
+        "missing_task": missing,
+    }
+    for task_id in task_ids:
+        if task_id not in by_id:
+            continue
+        simulation = by_id[task_id]
+        reason = str(simulation.get("termination_reason") or "")
+        if reason in INFRA_REASONS:
+            buckets["infrastructure_error"].append(task_id)
+        if "max" in reason or reason in {"too_many_steps", "max_steps"}:
+            buckets["max_steps"].append(task_id)
+        reward = (simulation.get("reward_info") or {}).get("reward")
+        if reward is None:
+            buckets["missing_reward"].append(task_id)
+            continue
+        reward = float(reward)
+        rewards.append(reward)
+        if reward >= 1.0:
+            buckets["success"].append(task_id)
+        db_reward = _component(simulation, "DB")
+        if db_reward is None:
+            buckets.setdefault("db_missing", []).append(task_id)
+        else:
+            db_scores.append(db_reward)
+            if db_reward < 1.0:
+                buckets["db_mismatch"].append(task_id)
+        nl_reward = _component(simulation, "NL_ASSERTION")
+        if nl_reward is not None:
+            nl_scores.append(nl_reward)
+            if nl_reward < 1.0:
+                buckets["nl_fail"].append(task_id)
+        if _guard_refusal(simulation):
+            buckets["guard_refusal"].append(task_id)
+    return {
+        "n": len(task_ids),
+        "scored": len(rewards),
+        "infra_errors": len(buckets["infrastructure_error"]),
+        "pass_1": (sum(rewards) / len(rewards)) if rewards else None,
+        "db_match": (sum(db_scores) / len(db_scores)) if db_scores else None,
+        "db_n": len(db_scores),
+        "nl_assertion": (sum(nl_scores) / len(nl_scores)) if nl_scores else None,
+        "nl_n": len(nl_scores),
+        "buckets": buckets,
+    }
+
+
+def _fmt(value: float | None) -> str:
+    if value is None:
+        return "n/a"
+    return f"{value:.4f}"
+
+
+def _relation(candidate: float, baseline: float) -> str:
+    if candidate > baseline:
+        return "高于"
+    if candidate < baseline:
+        return "低于"
+    return "等于"
+
+
+def main() -> None:
+    task_ids = retail_task_ids()
+    cells = (
+        {
+            "key": "tau_retail",
+            "label": "τ llm_agent",
+            "agent": "llm_agent",
+            "prompt_version": "tau",
+            "guard_mode": "0",
+        },
+        {
+            "key": "knowdesk_retail",
+            "label": "knowdesk_graph",
+            "agent": "knowdesk_graph",
+            "prompt_version": "v2",
+            "guard_mode": "1",
+        },
+    )
+    summaries = []
+    for cell in cells:
+        kwargs = dict(
+            domain="retail",
+            agent=cell["agent"],
+            retrieval="builtin",
+            prompt_version=cell["prompt_version"],
+            guard_mode=cell["guard_mode"],
+            compaction_mode="0",
+            task_ids=task_ids,
+            max_steps=RETAIL_MAX_STEPS,
+            num_trials=1,
+            language="zh",
+        )
         try:
-            sims = json.loads(res_file.read_text(encoding="utf-8")).get("simulations", [])
-            if len(sims) >= num_tasks:
-                return res_file
-        except Exception:
-            pass
-
-    register_knowdesk_components()
-    llm_args = json.dumps({"temperature": 0, "extra_body": {"enable_thinking": False}})
-    argv = [
-        "tau2", "run",
-        "--domain", "retail",
-        "--language", "zh",
-        "--agent", agent_name,
-        "--agent-llm", MODEL_NAME,
-        "--user-llm", MODEL_NAME,
-        "--agent-llm-args", llm_args,
-        "--user-llm-args", llm_args,
-        "--num-tasks", str(num_tasks),
-        "--max-steps", "50",
-        "--max-concurrency", "6",
-        "--save-to", save_name,
+            run = run_tau(exp="x9", seed=SEED, nl_judge_model=DEFAULT_MODEL, **kwargs)
+        except RuntimeError as exc:
+            text = str(exc)
+            if "infrastructure errors" not in text and "has no reward" not in text:
+                raise
+            run = {"results_path": signed_results_path(**kwargs)}
+        summary = _summarize(run["results_path"], task_ids)
+        summary["label"] = cell["label"]
+        summary["key"] = cell["key"]
+        summaries.append(summary)
+    baseline, candidate = summaries
+    lines = [
+        "# X9 中文 retail 前 50 单",
+        "",
+        f"任务号取零售任务文件的前 50 个，max_steps={RETAIL_MAX_STEPS}，语言 `zh`，检索 `builtin`。",
+        "两边的 NL assertion 裁判都显式指向百炼，避免 τ 默认的 OpenAI 裁判造成基础设施错误。",
+        "DB Match 与 NL Assertion 分开统计。没有该项得分的任务不补 0。",
+        "",
+        "| 配置 | 有奖励的任务 | Pass^1（综合） | DB Match | DB 任务数 | NL Assertion | NL 任务数 | Infra Errors |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|",
     ]
-    old_argv = sys.argv
-    try:
-        sys.argv = argv
-        tau2_cli_main()
-    except SystemExit:
-        pass
-    finally:
-        sys.argv = old_argv
-    return res_file
+    for summary in summaries:
+        lines.append(
+            f"| {summary['label']} | {summary['scored']} | {_fmt(summary['pass_1'])} | "
+            f"{_fmt(summary['db_match'])} | {summary['db_n']} | {_fmt(summary['nl_assertion'])} | "
+            f"{summary['nl_n']} | {summary['infra_errors']} |"
+        )
+    lines.extend(["", "## 对照", ""])
+    if baseline["pass_1"] is None or candidate["pass_1"] is None:
+        lines.append("有配置没有综合奖励，不能比较 Pass^1。")
+    else:
+        lines.append(
+            f"knowdesk_graph 的综合 Pass^1 `{candidate['pass_1']:.4f}` "
+            f"{_relation(candidate['pass_1'], baseline['pass_1'])} "
+            f"τ 基线 `{baseline['pass_1']:.4f}`。"
+        )
+    lines.extend(["", "## 失败归因", ""])
+    for summary in summaries:
+        lines.append(f"### {summary['label']}")
+        lines.append("")
+        for name, ids in summary["buckets"].items():
+            shown = ", ".join(ids[:15])
+            suffix = "" if len(ids) <= 15 else " ..."
+            lines.append(f"- {name}: {len(ids)}" + (f" ({shown}{suffix})" if ids else ""))
+        lines.append("")
+    REPORT_PATH.write_text("\n".join(lines), encoding="utf-8")
+    write_manifest(
+        "x9",
+        model=DEFAULT_MODEL,
+        llm_args=dict(DEFAULT_LLM_ARGS),
+        seed=SEED,
+        split_name="retail_zh_first50",
+        task_ids=task_ids,
+        max_steps=RETAIL_MAX_STEPS,
+        command="uv run --no-sync python eval/run_x9_retail_zh.py",
+        metrics={
+            summary["key"]: {key: value for key, value in summary.items() if key != "buckets"}
+            | {"bucket_counts": {name: len(ids) for name, ids in summary["buckets"].items()}}
+            for summary in summaries
+        },
+        extra={"nl_judge_model": DEFAULT_MODEL, "retrieval": "builtin", "language": "zh"},
+    )
+    infra = sum(summary["infra_errors"] for summary in summaries)
+    missing = sum(len(summary["buckets"]["missing_reward"]) for summary in summaries)
+    missing_tasks = sum(len(summary["buckets"]["missing_task"]) for summary in summaries)
+    print(f"wrote {REPORT_PATH}")
+    if infra or missing or missing_tasks or any(summary["scored"] != 50 for summary in summaries):
+        raise RuntimeError(
+            f"retail run is not clean: infra={infra}, missing_reward={missing}, "
+            f"missing_task={missing_tasks}. The report was written before this error."
+        )
 
-def main():
-    num_tasks = 50 if "--full50" in sys.argv else 10
-    p_base = run_retail_zh(f"x9_retail_zh_base_n{num_tasks}", "llm_agent", num_tasks)
-    p_graph = run_retail_zh(f"x9_retail_zh_graph_n{num_tasks}", "knowdesk_graph", num_tasks)
-
-    def _calc(p: Path):
-        sims = json.loads(p.read_text(encoding="utf-8")).get("simulations", [])
-        n = len(sims)
-        pass_db = sum(float((s.get("reward_info") or {}).get("reward", 0.0)) for s in sims) / n if n else 0.0
-        turns = sum(len(s.get("messages", [])) for s in sims) / n if n else 0.0
-        return n, pass_db, turns
-
-    n1, r1, t1 = _calc(p_base)
-    n2, r2, t2 = _calc(p_graph)
-    md = "\n".join([
-        f"# X9 中文第二域 (`retail --language zh`) 迁移评测结果 (n={n2}, 模型: `{MODEL_NAME}`)\n",
-        "| 配置 | DB 终态通过率 (Pass^1) | 平均交互步数 |",
-        "|---|---:|---:|",
-        f"| 1. τ原生基线 (`llm_agent`) | {r1:.4f} | {t1:.1f} |",
-        f"| 2. KnowDesk-LangGraph (`knowdesk_graph` + Guard) | {r2:.4f} | {t2:.1f} |\n",
-    ])
-    REPORT_X9_PATH.write_text(md, encoding="utf-8")
-    print("\n" + "=" * 70)
-    print(md)
 
 if __name__ == "__main__":
     main()
