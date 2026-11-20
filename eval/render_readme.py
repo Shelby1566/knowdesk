@@ -305,6 +305,106 @@ def assert_no_banned_phrases(text: str) -> None:
         raise RuntimeError(f"README contains banned wording: {hits}")
 
 
+def _split_row(line: str) -> list[str]:
+    return [cell.strip() for cell in line.strip().strip("|").split("|")]
+
+
+def _first_markdown_table(text: str) -> str | None:
+    lines = text.splitlines()
+    for index, line in enumerate(lines):
+        if not line.startswith("|") or index + 1 >= len(lines) or "---" not in lines[index + 1]:
+            continue
+        block = [line, lines[index + 1]]
+        cursor = index + 2
+        while cursor < len(lines) and lines[cursor].startswith("|"):
+            block.append(lines[cursor])
+            cursor += 1
+        return "\n".join(block)
+    return None
+
+
+def _unrun_sentence(body: str) -> str | None:
+    for line in body.splitlines():
+        stripped = line.strip()
+        if stripped and any(token in stripped for token in ("不填写", "尚未运行", "尚未", "已撤回")):
+            return stripped
+    return None
+
+
+def _section(body: str, start: str, end: str) -> str:
+    lines = body.splitlines()
+    start_at = next((index for index, line in enumerate(lines) if start in line), None)
+    if start_at is None:
+        raise RuntimeError(f"missing section {start!r}")
+    end_at = next(
+        (index for index, line in enumerate(lines) if index > start_at and end in line),
+        len(lines),
+    )
+    return "\n".join(lines[start_at:end_at]).strip()
+
+
+def _x1_test67_table(body: str) -> str:
+    """Copy Recall@10 and MRR cells from the frozen test-67 tables. No other numbers."""
+    heading = ""
+    chosen: list[tuple[str, list[str], list[list[str]]]] = []
+    lines = body.splitlines()
+    index = 0
+    while index < len(lines):
+        if lines[index].startswith("#"):
+            heading = lines[index]
+        if lines[index].startswith("|") and index + 1 < len(lines) and "---" in lines[index + 1]:
+            header = _split_row(lines[index])
+            index += 2
+            rows: list[list[str]] = []
+            while index < len(lines) and lines[index].startswith("|"):
+                rows.append(_split_row(lines[index]))
+                index += 1
+            if "test 口语" in heading or "test 原始" in heading:
+                chosen.append((heading, header, rows))
+            continue
+        index += 1
+    if not chosen:
+        raise RuntimeError("RESULTS_X1.md has no test 67 table")
+    rendered = [
+        "| 切分 | 检索配置 | Recall@10 | MRR |",
+        "|---|---|---:|---:|",
+    ]
+    for title, header, rows in chosen:
+        try:
+            name_at = header.index("检索配置")
+            recall_at = header.index("Recall@10")
+            mrr_at = header.index("MRR")
+        except ValueError as exc:
+            raise RuntimeError(f"X1 table is missing Recall@10 or MRR: {header}") from exc
+        split = "test 口语 n=67" if "口语" in title else "test 原始 n=67"
+        for row in rows:
+            rendered.append(f"| {split} | {row[name_at]} | {row[recall_at]} | {row[mrr_at]} |")
+    return "\n".join(rendered)
+
+
+def _live_tool_lines() -> list[str]:
+    from service.app import LIVE_OPENAI_TOOLS
+
+    return [f"- `{item['function']['name']}`" for item in LIVE_OPENAI_TOOLS]
+
+
+def _result_map(results: list[tuple[str, str]]) -> dict[str, str]:
+    return {name: body for name, body in results}
+
+
+def _linked_result(name: str, body: str | None, *, table_marker: str | None = None) -> list[str]:
+    link = f"原文：[`{name}`]({name})。"
+    if body is None:
+        return [f"本次生成输入里没有 `{name}`，这里不填写数字。", "", link]
+    table = _first_markdown_table(body)
+    if table and (table_marker is None or table_marker in table):
+        return [table, "", link]
+    sentence = _unrun_sentence(body)
+    if sentence:
+        return [sentence, "", link]
+    return ["该文件没有可摘录的主表，这里不另写数字。", "", link]
+
+
 def build_readme(
     root: Path,
     *,
@@ -324,200 +424,177 @@ def build_readme(
     checkout = re.search(r"checkout\s+([0-9a-f]{7,40})", dockerfile)
     if checkout is None:
         raise RuntimeError("Dockerfile does not pin a tau2-bench checkout")
-    cmd = source_line(root, "Dockerfile", "uvicorn")
-    compose = _read(root, "docker-compose.yml").rstrip() + "\n"
-    modules = ", ".join(f"`{name}`" for name in project["modules"])
-
-    limitations = f"""## 评测边界与诚实局限（Honest Limitations）
-
-本节是阅读后面任何表格之前的边界。实验数字不在这里复述。
-
-- 冻结切分在 `eval/splits.json`。生成时读到 seed `{splits["seed"]}`，任务总数 `{splits["total"]}`，dev `{splits["dev"]}`，test `{splits["test"]}`，regression `{splits["regression"]}`。dev 与 test 无交集，regression 是 dev 的子集。调参入口碰到 test id 时，`eval/gate.py` 抛出 `FrozenSplitError`。
-- 召回、延迟、Pass^1、成本、攻击成功率和 Cohen's κ 只出现在下方原样嵌入的 `RESULTS_*.md` 与 `eval/results/*_manifest.json`。结果文件写明尚未运行，或对应 manifest 不存在，就还没有这次实验的数字。
-- `docs/FAILURE_TAXONOMY.md` 不是 `eval/run_x2.py` 的输出。本生成器不读取、不转载该文件。
-- Guard 规则来自 `agent/guard_rules.yaml`（R01 到 R05）。τ 适配器里的失败关闭行为是：`{source_line(root, "adapters/tau2_adapter.py", "self.max_guard_retries = 2")}`。到达该上限后返回固定拒绝文本，并去掉 tool calls。这条机制不能外推成对任意输入的拦截率。
-- 追踪属性脱敏使用 `security.dlp.redact_text`。`SensitiveDataVault` 没有被 τ 适配器、`agent/graph.py`、`plain/loop.py`、`service/app.py` 或 `obs/otel_setup.py` 引用。
-- `create_checkpointer` 的 sqlite 后端会 `SqliteSaver.setup()`。postgres 与 redis 只在对应驱动已安装时构造；驱动缺失时抛出 ImportError，源码写明 `{source_line(root, "agent/checkpointer.py", "refusing to fall back to sqlite")}`。
-- OpenTelemetry SDK 始终安装内存导出器和 `PIIRedactingSpanProcessor`。OTLP `BatchSpanProcessor` 只在 `OTEL_EXPORTER_OTLP_ENDPOINT` 非空时挂上，并把缺少的 `/v1/traces` 补到路径末尾。服务记录模型调用时，token 取自供应商 usage；费用参数目前是源码中的 `{source_line(root, "service/app.py", "cost_rmb=0.0")}`。
-- 在线检索每次调用 `load_retrieval_defaults()`。重排函数存在于 `kb/rerank.py`，但不会因为某次消融召回更高就自动写进默认配置。`search_with_subagent_isolation` 定义在 `kb/hybrid_retriever.py`，τ 适配器、服务、`agent/graph.py` 和 `plain/loop.py` 都不调用它。
-- `KNOWDESK_COMPACTION` 不是 `1` 时，送给模型的消息保持原样。为 `1` 时只改模型副本，τ 保存的轨迹不改。
-- 服务新建会话的 SQL 默认是 `{source_line(root, "service/app.py", "verified INTEGER NOT NULL DEFAULT 0")}`。审批先核对 `X-Role` 为 supervisor，再核对 SQLite `approval_ledger` 或待审批 `idem_key`。
-- 当前仓库没有这些源文件：{ ", ".join(f"`{rel}`" for rel in ABSENT_SOURCES) }。
-- 本生成器不启动百炼调用，也不补写缺失实验。
-"""
-
-    if defaults is None:
-        defaults_section = (
-            "`kb/retrieval_defaults.json` 不存在。`load_retrieval_defaults()` 使用 "
-            "`kb/retrieval_config.py` 里 `RetrievalDefaults` 的字段默认值。生成器不把这些默认值抄成另一张指标表。\n"
+    collected_line = next(
+        line.strip()
+        for line in reversed(pytest_summary.splitlines())
+        if "collected" in line and "test" in line
+    )
+    by_name = _result_map(results)
+    if defaults:
+        defaults_data = json.loads(defaults)
+        defaults_line = (
+            "在线默认读自 `kb/retrieval_defaults.json`："
+            f"fusion_mode `{defaults_data['fusion_mode']}`，beta `{defaults_data['beta']}`，"
+            f"selected_on `{defaults_data['selected_on']}`。"
         )
     else:
-        defaults_section = "\n".join([
-            "`kb/retrieval_defaults.json` 原文如下。在线默认就是这一份，生成器不另做一张超参表。",
-            "",
-            _fence("json", defaults),
-            "",
-        ])
+        defaults_line = "`kb/retrieval_defaults.json` 不在仓库里。在线路径会使用代码里的内置默认。"
 
-    manifest_body = (
-        "目录 `eval/results/` 下没有 `*_manifest.json`。\n"
-        if not manifests
-        else "\n".join(_manifest_block(name, payload) for name, payload in manifests)
+    x1_lines = (
+        ["本次生成输入里没有 `RESULTS_X1.md`，这里不填写召回。", "", "原文：[`RESULTS_X1.md`](RESULTS_X1.md)。"]
+        if "RESULTS_X1.md" not in by_name
+        else [_x1_test67_table(by_name["RESULTS_X1.md"]), "", "原文：[`RESULTS_X1.md`](RESULTS_X1.md)。"]
     )
-    results_body = "\n".join(_results_block(name, body) for name, body in results)
-    skip_note = (
-        f"收集摘要里另有 skipped `{counts['skipped']}`、errors `{counts['errors']}`。"
-        if counts["skipped"] or counts["errors"]
-        else "收集摘要没有 skipped 或 errors。"
+    x2_lines = _linked_result("RESULTS_X2.md", by_name.get("RESULTS_X2.md"), table_marker="Pass^1")
+    x9_lines = _linked_result(
+        "RESULTS_X9_RETAIL_ZH.md", by_name.get("RESULTS_X9_RETAIL_ZH.md"), table_marker="DB Match"
     )
+    if "RESULTS_SAFETY_AND_JUDGE.md" in by_name:
+        x10_body = _section(by_name["RESULTS_SAFETY_AND_JUDGE.md"], "## 表 A", "## 表 B")
+        x10_body = x10_body.replace("## 表 A：单元级规则拦截", "#### X10 表 A：单元级规则拦截", 1)
+        x10_lines = [x10_body, "", "原文：[`RESULTS_SAFETY_AND_JUDGE.md`](RESULTS_SAFETY_AND_JUDGE.md)。"]
+    else:
+        x10_lines = ["本次生成输入里没有 `RESULTS_SAFETY_AND_JUDGE.md`，这里不填写规则拦截率。"]
+
+    other_lines = []
+    for name, body in results:
+        if name in {"RESULTS_X1.md", "RESULTS_X2.md", "RESULTS_X9_RETAIL_ZH.md", "RESULTS_SAFETY_AND_JUDGE.md"}:
+            continue
+        sentence = _unrun_sentence(body)
+        note = f" {sentence}" if sentence else ""
+        other_lines.append(f"- [`{name}`]({name})。{note}".rstrip())
+    if not other_lines:
+        other_lines.append("- 生成输入里没有额外的 `RESULTS_*.md`。")
+
+    manifest_lines = []
+    for name, payload in manifests:
+        metrics = payload.get("metrics")
+        if isinstance(metrics, dict) and metrics.get("status") == "not_run":
+            manifest_lines.append(
+                f"- `{name}`：`{{\"status\": \"not_run\"}}`。完整文件 [`eval/results/{name}`](eval/results/{name})。"
+            )
+        else:
+            manifest_lines.append(f"- [`eval/results/{name}`](eval/results/{name})")
+    if not manifest_lines:
+        manifest_lines.append("- `eval/results/` 下没有 `*_manifest.json`。")
 
     parts = [
         "# KnowDesk",
         "",
-        f"包版本 `{project['version']}`，Python `{project['requires_python']}`，均读自 `pyproject.toml`。",
-        "本文档由 `eval/render_readme.py` 生成。实验数字只来自生成当刻读到的 `RESULTS_*.md` 与 `eval/results/*_manifest.json`。",
-        f"生成时间（UTC）`{generated_at}`。手改本文件里的数字会在下次生成时被覆盖。",
+        "KnowDesk 是银行工单代理的执行与评测骨架：面包屑混合检索、失败关闭的动态 Schema Guard，以及可复现的 τ-bench 对照。",
         "",
-        "```bash",
-        "uv run --no-sync python eval/render_readme.py",
-        "```",
+        "`Python " + project["requires_python"] + "` · `FastAPI` · `LangGraph` · `SQLite` · `MCP` · `OpenTelemetry` · `FAISS` · `LiteLLM`",
         "",
-        limitations.rstrip(),
+        f"包版本 `{project['version']}`。本文由 `eval/render_readme.py` 在 `{generated_at}` 生成。表里的数字只从当时读到的 `RESULTS_*.md` 单元格抄出。",
         "",
-        "## 三条真实路径",
-        "",
-        "三条路径可以在同一次部署里分别存在。它们不共用一张执行图，工具也不走同一个进程入口。",
+        "## 架构",
         "",
         "```mermaid",
         "flowchart TB",
-        '  subgraph pathTau ["1. τ 评测"]',
-        "    tauCli[eval/tau_runner.py]",
+        '  subgraph evalPath ["τ 评测"]',
+        "    runner[eval/tau_runner.py]",
         "    adapter[adapters/tau2_adapter.py]",
-        "    agents[knowdesk_plain 与 knowdesk_graph]",
-        "    tauGuard[GuardEngine 失败关闭]",
-        "    retriever[进程级 KnowDeskHybridRetriever]",
-        "    excerpts[当次 pipeline state 的章节摘录]",
-        "    tauTools[τ orchestrator 执行工具]",
-        "    tauCli --> adapter --> agents",
-        "    agents --> tauGuard",
-        "    agents --> retriever --> excerpts",
+        "    agents[knowdesk_plain / knowdesk_graph]",
+        "    guard[GuardEngine]",
+        "    hybrid[KnowDeskHybridRetriever.search_sections]",
+        "    tauTools[τ orchestrator]",
+        "    runner --> adapter --> agents",
+        "    agents --> guard",
+        "    agents --> hybrid",
         "    agents --> tauTools",
         "  end",
-        '  subgraph pathStandalone ["2. 独立执行图与无框架循环"]',
-        "    graph[agent/graph.py]",
-        "    plain[plain/loop.py]",
-        "    sharedGuard[GuardEngine]",
-        "    idem[ReliableToolExecutor SHA-256 账本]",
-        "    ckpt[create_checkpointer sqlite 或 memory]",
-        "    graph --> sharedGuard --> idem",
-        "    graph --> ckpt",
-        "    plain --> sharedGuard",
-        "  end",
-        '  subgraph pathService ["3. FastAPI SSE 与 MCP"]',
+        '  subgraph servicePath ["FastAPI 演示"]',
         "    api[service/app.py]",
-        "    sse[StreamingResponse text/event-stream]",
-        "    mcpClient[mcp_client Client]",
-        "    mcpServer[mcp_server]",
-        "    otel[obs/otel_setup.py]",
-        "    jaeger[OTLP HTTP 仅在端点已设置时]",
-        "    api --> graph",
-        "    api --> sse",
-        "    api --> mcpClient --> mcpServer",
-        "    api --> otel --> jaeger",
+        "    graph[agent/graph.py]",
+        "    confirm[human_confirm interrupt]",
+        "    exec[tool_exec]",
+        "    ledger[SQLite idempotency_ledger]",
+        "    mcp[mcp_client Client]",
+        "    otel[OpenTelemetry SDK]",
+        "    api --> graph --> confirm --> exec --> ledger",
+        "    exec --> mcp",
+        "    api --> otel",
         "  end",
         "```",
         "",
-        "### 1. τ 评测路径",
+        "评测路径里的工具由 τ orchestrator 执行。`knowdesk_graph` 在适配器里另编一张每回合的图，不调用 `build_knowdesk_graph`。",
+        "演示路径进入 `build_knowdesk_graph`：`agent`、`guard`、`human_confirm`、`tool_exec`。人工确认只 `interrupt()`，恢复时不重跑已经执行过的工具。",
+        "服务在未同时传入 `llm_fn` 与 `tool_funcs` 时，用 LiteLLM、混合检索和进程内 MCP。`service.app:app` 第一次被访问时才 `create_knowdesk_app()`。",
+        defaults_line,
+        f"镜像把 tau2-bench 固定在 checkout `{checkout.group(1)}`。",
         "",
-        "`eval/tau_runner.py` 启动 τ CLI，并调用 `register_knowdesk_components()`。",
-        "未设置 `KNOWDESK_RETRIEVAL` 时，该函数使用 `hybrid`，再调用 `patch_retrieval_mode`。",
-        "hybrid 把 `BM25Retriever.retrieve` 换成进程级 `KnowDeskHybridRetriever.get_instance().search_sections`。",
-        "命中的 H2 正文写入当次检索 state 的 `knowdesk_section_excerpts`，`get_document_content` 优先返回这份摘录。",
-        "这条调用不传 ACL，因此 `can_access` 在上下文为空时放行文档。服务路径才把请求级 `AccessControlContext` 放进 `request_acl`。",
-        "注册的两个 agent 是 `knowdesk_plain` 与 `knowdesk_graph`。",
-        "`knowdesk_graph` 在适配器内部另编一张每回合的 `StateGraph`：`agent` 到 `guard`，checkpointer 是 `InMemorySaver`。",
-        "它不调用 `build_knowdesk_graph`。工具调用仍由 τ 的 orchestrator 执行，不经过 `mcp_client`。",
-        "银行业 SOP 只在工具名含 `KB_search` 或 `unlock_discoverable_agent_tool` 时拼到策略前面。",
-        "Guard 打开时，银行业才 `enforce_unlock`；`enforce_verification` 跟随 `KNOWDESK_GUARD`。",
-        "τ agent 把 `require_human_confirm_on_write` 设为关闭，这样回放不会停在人工审批。",
-        "安全状态按会话键缓存在适配器进程内，上限 `_SEC_CACHE_MAX`。",
+        "| 路径 | 入口 | 工具谁来执行 | 状态放在哪 |",
+        "|---|---|---|---|",
+        "| τ 评测 | `eval/tau_runner.py` | τ orchestrator | 适配器进程内的安全状态，图用 `InMemorySaver` |",
+        "| 无框架循环 | 调用方自己建 `PlainAgentLoop` | `ReliableToolExecutor` | 调用方决定要不要 SQLite 账本 |",
+        "| FastAPI 演示 | `service.app:app` | 进程内 MCP | `SqliteSaver` 加 `idempotency_ledger` |",
         "",
-        "### 2. 独立执行图与无框架循环",
+        "## 实测结果",
         "",
-        "`build_knowdesk_graph` 的节点是 `agent`、`guard`、`human_confirm`、`tool_exec`。",
-        "未传入 checkpointer 时编译结果使用 `InMemorySaver`。传入 sqlite 路径时使用 `SqliteSaver`，并先 `setup()`。",
-        "`ReliableToolExecutor` 在提供 `idempotency_db_path` 时把结果写入 SQLite `idempotency_ledger`。",
-        "键是 `compute_idempotency_key`：会话、工具名和规范化 JSON 的 SHA-256。异常不写入账本。",
-        "未提供数据库路径时，账本只留在进程内的 `OrderedDict`。",
-        "`PlainAgentLoop` 使用同一套 `GuardEngine` 与 `ReliableToolExecutor`，不编译 LangGraph，也不打开 checkpointer。",
-        "`service/app.py` 与 `adapters/tau2_adapter.py` 都不构造 `PlainAgentLoop`。",
-        "服务进程进入的是 `build_knowdesk_graph`。无框架循环要由调用方自己创建，并自己决定是否带上 SQLite 账本。",
+        "下面三张表是首页上的全部实验数字。原始 JSON 和完整报告走相对链接，不铺在这里。",
         "",
-        "### 3. FastAPI SSE 与 MCP",
+        "### X1 检索消融（test 67）",
         "",
-        "`service.app:app` 由模块 `__getattr__` 在第一次访问时调用 `create_knowdesk_app()`。",
-        "该工厂连接 SQLite checkpointer、审批账本和 `ReliableToolExecutor`，再编译第 2 节的图。",
-        "未同时传入 `llm_fn` 与 `tool_funcs` 时，`build_live_runtime()` 会接上 LiteLLM、混合检索和 `MCPToolBackend`。",
-        "单元测试若要避免在线客户端，需要两个参数一起传入。",
-        "`POST /sessions/{session_id}/messages` 在生产者线程里跑 `graph.stream`，再由异步 `event_stream` 以 `text/event-stream` 写出。",
-        "ContextVar 的设置和复位都在该线程，不跨 yield 持有 token。",
-        "进程内 MCP 使用官方 `Client(..., mode=\"legacy\")`，每个调用单独建客户端。",
-        "设置了 `server_url` 时改为 `Client(server_url)`。服务端工厂是 `create_knowdesk_mcp_server`。",
-        "银行环境加载失败时 `_get_banking_env` 抛出异常，不返回替代对象。",
-        "追踪入口是 `obs/otel_setup.py` 的 OpenTelemetry SDK。Compose 把 OTLP 端点指到 Jaeger 时，span 经 OTLP HTTP 送出。",
-        "未设置该环境变量时，span 留在内存导出器和环形缓冲里。",
+        "超参只在 dev 口语查询上选定。这里只抄 test 67 的口语查询和原始工单说明，列是 Recall@10 与 MRR。",
         "",
-        "## 在线检索配置",
+        *x1_lines,
         "",
-        defaults_section.rstrip(),
+        "### X2 银行域端到端（dev 30）",
         "",
-        "向量索引类型只接受 `flat`（`IndexFlatIP`）和 `hnsw`。后者的构造参数以 `kb/vectorstore.py` 当前源码为准。",
+        *x2_lines,
         "",
-        "## 评测记录",
+        "### X9 中文零售与 X10 规则拦截",
         "",
-        "下面两节是生成时读入的原文。manifest 里的 `git_sha` 是写出该文件时的 `HEAD`，`git_dirty` 表示当时工作区是否干净。",
-        "后续提交不会回填这些字段。",
+        *x9_lines,
         "",
-        "### Manifest",
+        *x10_lines,
         "",
-        manifest_body.rstrip(),
+        "## 工程要点",
         "",
-        "### RESULTS 原文",
+        "- 面包屑混合检索：BM25 块与 Qwen 向量做静态 RRF，在线默认带意图加权；重排只留在消融里。",
+        "- Fail-Closed 动态 Schema Guard：解锁后按当次 schema 校验参数，违规在重试上限后返回固定拒绝并去掉 tool calls。",
+        "- LangGraph 把人工确认放在独立 `interrupt` 节点。确认恢复不会把同一写操作再执行一遍。",
+        "- SQLite 幂等账本按会话、工具名和规范化参数做 SHA-256。业务失败不写入，进程重启后成功写仍可重放。",
+        "- 工具传输用 MCP Python SDK 的 `Client(..., mode=\"legacy\")`。追踪用 OpenTelemetry SDK；只有设置了 OTLP 端点才把 span 送到 Jaeger。",
         "",
-        results_body.rstrip(),
+        "## 演示台工具",
         "",
-        "## 测试收集",
+        "在线模型只看到下面这些函数。隐藏写操作走 `call_discoverable_agent_tool`，不逐个放进 schema。",
         "",
-        "数量来自生成时执行的 `uv run --no-sync pytest --collect-only -q`。",
-        f"摘要解析结果：collected `{counts['collected']}`，节点 id `{counts['nodes']}`。{skip_note}",
-        "这里的 collected 是收集数量，不是通过数量。通过、失败和跳过以实际 `pytest` 运行为准。",
+        *_live_tool_lines(),
         "",
-        _fence("text", pytest_summary),
-        "",
-        "## 运行",
-        "",
-        f"控制台脚本入口是 `{project['script']}`，指向 `knowdesk:main`。" if project["script"] else "pyproject 没有声明 `knowdesk` 脚本。",
-        "`knowdesk serve` 与镜像启动命令都加载 `service.app:app`，因此会走到上面的懒构造。",
+        "## Quick Start",
         "",
         "```bash",
-        "uv run --no-sync pytest -q -W ignore",
+        "uv run --no-sync pytest -v -W ignore",
         "uv run --no-sync uvicorn service.app:app --host 0.0.0.0 --port 8000",
-        "uv run --no-sync knowdesk serve",
-        'uv run --no-sync knowdesk search "credit card annual fee"',
         "```",
         "",
-        f"镜像把 tau2-bench 固定在 checkout `{checkout.group(1)}`。Dockerfile 中的启动行是：",
+        "演示台是 [http://localhost:8000](http://localhost:8000)。需要 `DASHSCOPE_API_KEY`。单测不需要。",
         "",
-        _fence("text", cmd),
+        "```bash",
+        "uv run --no-sync python eval/run_x2.py",
+        "uv run --no-sync python eval/run_x9_retail_zh.py",
+        "uv run --no-sync python eval/injection.py --table-a",
+        "uv run --no-sync python eval/render_readme.py",
+        "```",
         "",
-        "`docker-compose.yml` 原文：",
+        "X2 是 dev 30、max_steps=60、三组同条件。X9 是中文 retail 前 30 单的 DB Match。两条都会调用百炼。X1 的 test 67 报告已经在 `RESULTS_X1.md`，生成器不重跑它。",
+        f"生成时的收集摘要：{collected_line}。解析结果 collected `{counts['collected']}`。这是收集数量，不是通过数量。",
         "",
-        _fence("yaml", compose),
+        "## 评测边界与诚实局限（Honest Limitations）",
         "",
-        "## 包",
+        f"- 冻结切分在 `eval/splits.json`：seed `{splits['seed']}`，总数 `{splits['total']}`，dev `{splits['dev']}`，test `{splits['test']}`，regression `{splits['regression']}`。首页数字只来自链接到的 `RESULTS_*.md`；文件写明未跑，表就空着。",
+        "- Guard 的失败关闭是 `max_guard_retries = 2` 之后的固定拒绝。它不是对任意输入的拦截率。X10 表 A 是规则单测，Guard OFF 的违规率按定义是 1.0。",
+        "- `service/app.py` 与 `adapters/tau2_adapter.py` 都不构造 `PlainAgentLoop`。在线检索不调用 `search_with_subagent_isolation`。",
+        "- 跨度里的脱敏是 `security.dlp.redact_text`。没有写进上表的通过率、费用或 Cohen's κ，就是这次发布没有那次测量。",
         "",
-        f"`tool.uv.build-backend.module-name` 列出的模块：{modules}。",
-        "策略文档和 τ 任务不在本仓库，随可编辑依赖 `../tau2-bench` 加载。",
+        "## 结果文件",
+        "",
+        *other_lines,
+        *manifest_lines,
+        "",
+        "重新生成：`uv run --no-sync python eval/render_readme.py`。",
         "",
     ]
     text = "\n".join(parts).rstrip() + "\n"
@@ -528,8 +605,11 @@ def build_readme(
 def main() -> None:
     summary = collect_pytest_summary(ROOT)
     rendered = build_readme(ROOT, pytest_summary=summary)
+    line_count = rendered.count("\n")
+    if not 150 <= line_count <= 220:
+        raise RuntimeError(f"README.md is {line_count} lines; expected 150 to 220")
     README_PATH.write_text(rendered, encoding="utf-8")
-    print(f"wrote {README_PATH}")
+    print(f"wrote {README_PATH} ({line_count} lines)")
 
 
 if __name__ == "__main__":

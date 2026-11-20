@@ -22,10 +22,37 @@ PROTOCOL_MAX_STEPS = 70
 INFRA_REASONS = {"infrastructure_error", "unexpected_error"}
 
 
+def prefer_direct_dashscope() -> None:
+    """Reach dashscope.aliyuncs.com directly. A local HTTP proxy drops its TLS handshake."""
+    host = "dashscope.aliyuncs.com"
+    for name in ("NO_PROXY", "no_proxy"):
+        parts = [part.strip() for part in os.environ.get(name, "").split(",") if part.strip()]
+        if host not in parts:
+            parts.append(host)
+        os.environ[name] = ",".join(parts)
+
+
+def install_direct_dashscope_client() -> None:
+    """Replace any HTTP client created before dashscope.aliyuncs.com was on NO_PROXY."""
+    prefer_direct_dashscope()
+    import httpx
+    import litellm
+
+    limits = httpx.Limits(max_keepalive_connections=5, max_connections=10)
+    litellm.client_session = httpx.Client(
+        limits=limits,
+        trust_env=True,
+        follow_redirects=True,
+        timeout=120.0,
+    )
+
+
 def load_tau_env() -> None:
+    prefer_direct_dashscope()
     env_path = TAU_ROOT / ".env"
     if env_path.exists():
         load_dotenv(env_path, override=False)
+    prefer_direct_dashscope()
     builtins.input = lambda *_args, **_kwargs: "y"
 
 
@@ -87,14 +114,18 @@ def cache_dirname(
     num_trials: int,
     domain: str,
     language: str | None,
+    protocol: str | None = None,
 ) -> str:
     """Directory identity is the full run signature, so a different protocol cannot reuse it."""
     digest = hashlib.sha256("\n".join(task_ids).encode("utf-8")).hexdigest()[:8]
     language_tag = language or "default"
-    return (
+    name = (
         f"{domain}_{language_tag}_{agent}_{retrieval}_p{prompt_version}_ms{max_steps}"
         f"_g{guard_mode}_c{compaction_mode}_n{len(task_ids)}_t{num_trials}_{digest}"
     )
+    if protocol:
+        return f"{name}_{protocol}"
+    return name
 
 
 def _signature(
@@ -113,8 +144,9 @@ def _signature(
     model: str,
     llm_args: dict[str, Any],
     language: str | None,
+    protocol: str | None = None,
 ) -> dict[str, Any]:
-    return {
+    payload = {
         "dirname": dirname,
         "domain": domain,
         "agent": agent,
@@ -130,6 +162,9 @@ def _signature(
         "llm_args": llm_args,
         "language": language,
     }
+    if protocol:
+        payload["protocol"] = protocol
+    return payload
 
 
 def _coverage(results_path: Path, task_ids: list[str], num_trials: int) -> None:
@@ -176,6 +211,8 @@ def run_tau(
     language: str | None = None,
     nl_judge_model: str | None = None,
     allow_held_out: bool = False,
+    protocol: str | None = None,
+    extra_argv: list[str] | None = None,
 ) -> dict[str, Any]:
     if not task_ids:
         raise RuntimeError("refusing to run an empty task list")
@@ -201,6 +238,7 @@ def run_tau(
         num_trials=num_trials,
         domain=domain,
         language=language,
+        protocol=protocol,
     )
     signature = _signature(
         dirname=dirname,
@@ -217,6 +255,7 @@ def run_tau(
         model=used_model,
         llm_args=used_args,
         language=language,
+        protocol=protocol,
     )
     save_dir = SIM_ROOT / dirname
     signature_path = save_dir / "knowdesk_signature.json"
@@ -264,13 +303,17 @@ def run_tau(
         "--seed", str(seed),
         "--save-to", dirname,
         "--task-ids", *task_ids,
+        "--auto-resume",
     ]
     if domain == "banking_knowledge":
         argv.extend(["--retrieval-config", "bm25"])
     if language:
         argv.extend(["--language", language])
+    if extra_argv:
+        argv.extend(extra_argv)
     from tau2.cli import main as tau2_cli_main
 
+    install_direct_dashscope_client()
     print(f"running {dirname}", flush=True)
     old_argv = sys.argv
     try:
@@ -302,6 +345,7 @@ def signed_results_path(
     max_steps: int,
     num_trials: int,
     language: str | None,
+    protocol: str | None = None,
 ) -> Path:
     """Locate a completed run. A missing signature is not treated as a usable cache."""
     dirname = cache_dirname(
@@ -315,6 +359,7 @@ def signed_results_path(
         num_trials=num_trials,
         domain=domain,
         language=language,
+        protocol=protocol,
     )
     directory = SIM_ROOT / dirname
     results_path = directory / "results.json"

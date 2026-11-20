@@ -1,6 +1,8 @@
-"""X2 dev-30 factor comparison. Every cell uses max_steps=70.
+"""X2 dev-30 comparison. Three cells, max_steps=60.
 
 Running this file calls Bailian. It does not fill missing tasks with reward 0.
+The five-cell list in eval/x2_protocol.py stays available for X3; this entrypoint
+runs only the three release cells.
 """
 
 from __future__ import annotations
@@ -17,21 +19,28 @@ from eval.manifest import write_manifest
 from eval.metrics import (
     compute_action_recall,
     compute_online_doc_recall,
+    rewards_for_tasks,
     summarize_simulation_file,
 )
+from eval.pass_k import paired_bootstrap_diff
 from eval.tau_runner import DEFAULT_LLM_ARGS, DEFAULT_MODEL, run_tau
-from eval.x2_protocol import PROTOCOL_MAX_STEPS, PROTOCOL_TRIALS, SEED, X2_CELLS, cell_by_key
+from eval.x2_protocol import PROTOCOL_TRIALS, SEED, cell_by_key
 from kb.loader import load_documents
 
 ROOT = Path(__file__).resolve().parents[1]
 REPORT_PATH = ROOT / "RESULTS_X2.md"
 SELECTED_PATH = Path(__file__).resolve().parent / "results" / "x2_selected.json"
-
-
-def _rate(value: float | None) -> str:
-    if value is None:
-        return "n/a"
-    return f"{value:.4f}"
+RELEASE_MAX_STEPS = 60
+RELEASE_CELL_KEYS = (
+    "llm_agent_builtin",
+    "knowdesk_plain_hybrid",
+    "knowdesk_graph_hybrid",
+)
+RELEASE_LABELS = {
+    "llm_agent_builtin": "τ 原生基线 (llm_agent + 内置 BM25)",
+    "knowdesk_plain_hybrid": "KnowDesk-Plain (knowdesk_plain + 自研混合检索 + Fail-Closed Guard)",
+    "knowdesk_graph_hybrid": "KnowDesk-LangGraph (knowdesk_graph + 自研混合检索 + Fail-Closed Guard)",
+}
 
 
 def classify_failure(sim: dict, task: dict, doc_ids: set[str], title_to_id: dict[str, str]) -> str:
@@ -79,7 +88,9 @@ def main() -> None:
     if len(task_ids) != 30:
         raise RuntimeError(f"X2 tunes on dev 30, got {len(task_ids)}")
     rows = []
-    for cell in X2_CELLS:
+    for key in RELEASE_CELL_KEYS:
+        cell = cell_by_key(key)
+        cell["label"] = RELEASE_LABELS[key]
         run = run_tau(
             exp="x2",
             domain="banking_knowledge",
@@ -89,23 +100,25 @@ def main() -> None:
             guard_mode=cell["guard_mode"],
             compaction_mode=cell["compaction_mode"],
             task_ids=task_ids,
-            max_steps=PROTOCOL_MAX_STEPS,
+            max_steps=RELEASE_MAX_STEPS,
             num_trials=PROTOCOL_TRIALS,
             seed=SEED,
         )
         metrics = summarize_simulation_file(run["results_path"])
         if int(metrics["n"]) != len(task_ids):
             raise RuntimeError(f"{cell['key']} scored {metrics['n']} simulations, expected {len(task_ids)}")
-        rows.append({"cell": cell, "run": run, "metrics": metrics})
+        scores = rewards_for_tasks(run["results_path"], task_ids)
+        rows.append({"cell": cell, "run": run, "metrics": metrics, "scores": scores})
 
     best = max(rows, key=lambda row: _selection_key(row["metrics"]))
     selected = {
         **cell_by_key(best["cell"]["key"]),
+        "label": best["cell"]["label"],
         "pass_1": best["metrics"]["pass_1"],
         "action_exact_recall": best["metrics"]["action_exact_recall"],
         "action_name_recall": best["metrics"]["action_name_recall"],
         "results_path": str(best["run"]["results_path"]),
-        "max_steps": PROTOCOL_MAX_STEPS,
+        "max_steps": RELEASE_MAX_STEPS,
         "split_name": "dev30",
     }
     SELECTED_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -124,23 +137,28 @@ def main() -> None:
         task = tasks.get(str(simulation.get("task_id")), {})
         taxonomy[classify_failure(simulation, task, doc_ids, title_to_id)] += 1
 
+    baseline_scores = rows[0]["scores"]
     lines = [
-        f"# X2 dev 30 因子实验（max_steps={PROTOCOL_MAX_STEPS}，模型 `{DEFAULT_MODEL}`）",
+        f"# X2 dev 30（max_steps={RELEASE_MAX_STEPS}，temperature=0，思考关闭，模型 `{DEFAULT_MODEL}`）",
         "",
-        "五格配置只在 dev 30 上比较。平均消息条数是轨迹里的消息数，平均 LLM 调用是 assistant 消息数。",
-        "cache_hit_rate = cached_tokens / prompt_tokens；供应商没返回 cached_tokens 时写 n/a。",
+        "三组使用同一批 dev 30、同一个 max_steps。Pass^1 是任务奖励均值。",
+        "配对 Bootstrap 是候选减 τ 基线，10000 次、种子 42、95% 区间。基线行没有对照差。",
         f"按 Pass^1、精确参数召回、工具名召回选出的配置是 `{selected['key']}`。",
         "",
-        "| 配置 | Pass^1 | 工具名召回 | 精确参数召回 | 在线文档召回 | 平均消息条数 | 平均 LLM 调用 | cache_hit_rate | 平均输入 token | 平均输出 token | 单单成本(元) |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "| 配置 | Pass^1 | 工具名召回 | 精确参数召回 | 在线文档召回 | 平均输入 token | 相对基线 Pass^1 差 95% CI |",
+        "|---|---:|---:|---:|---:|---:|---|",
     ]
     for row in rows:
         metrics = row["metrics"]
+        if row["cell"]["key"] == "llm_agent_builtin":
+            interval = "n/a（对照）"
+        else:
+            diff = paired_bootstrap_diff(baseline_scores, row["scores"], seed=SEED)
+            interval = f"[{diff['ci_95_low']:.4f}, {diff['ci_95_high']:.4f}] {diff['verdict']}"
         lines.append(
             f"| {row['cell']['label']} | {metrics['pass_1']:.4f} | {metrics['action_name_recall']:.4f} | "
             f"{metrics['action_exact_recall']:.4f} | {metrics['online_doc_recall']:.4f} | "
-            f"{metrics['avg_messages']:.1f} | {metrics['avg_llm_calls']:.1f} | {_rate(metrics['cache_hit_rate'])} | "
-            f"{metrics['avg_in_tokens']:.0f} | {metrics['avg_out_tokens']:.0f} | {metrics['avg_cost_rmb']:.4f} |"
+            f"{metrics['avg_in_tokens']:.0f} | {interval} |"
         )
     lines.extend(["", "## knowdesk_graph + hybrid 失败归因", "", "| 类别 | 任务数 |", "|---|---:|"])
     for name, count in sorted(taxonomy.items()):
@@ -154,7 +172,7 @@ def main() -> None:
         seed=SEED,
         split_name="dev30",
         task_ids=task_ids,
-        max_steps=PROTOCOL_MAX_STEPS,
+        max_steps=RELEASE_MAX_STEPS,
         command="uv run --no-sync python eval/run_x2.py",
         metrics={row["cell"]["key"]: row["metrics"] for row in rows},
         extra={"selected": selected, "taxonomy_graph_hybrid": dict(taxonomy)},

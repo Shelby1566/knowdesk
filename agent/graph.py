@@ -191,12 +191,23 @@ def build_knowdesk_graph(
         real_args = tc.get("real_args", {})
         session_id = state.get("session_id", "default")
 
-        fn = tool_funcs.get(t_name) or tool_funcs.get(real_name)
+        # The outer dispatcher is what MCP's call_discoverable_agent_tool expects.
+        # A directly registered inner tool, such as the unit-test freeze_card, still gets real_args.
+        if t_name == "call_discoverable_agent_tool" and tool_funcs.get(t_name) is not None:
+            fn = tool_funcs.get(t_name)
+            args_obj = real_args if isinstance(real_args, dict) else {}
+            exec_args = {
+                "agent_tool_name": real_name,
+                "arguments": json.dumps(args_obj, ensure_ascii=False),
+            }
+        else:
+            fn = tool_funcs.get(t_name) or tool_funcs.get(real_name)
+            exec_args = real_args if isinstance(real_args, dict) else {}
         is_write = guard.is_high_risk_write(t_name, real_name)
         if fn is None:
             out_str = json.dumps({"error_type": "not_found", "message": f"Tool '{real_name}' not found."})
         else:
-            out_str = executor.execute(session_id, real_name, real_args, fn, is_write=is_write)
+            out_str = executor.execute(session_id, real_name, exec_args, fn, is_write=is_write)
 
         sec = SecurityState(
             verified=bool(state.get("verified", False)),

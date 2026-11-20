@@ -317,7 +317,9 @@ def test_readme_renderer_embeds_sources_without_inflated_claims():
         results=[("RESULTS_DEMO.md", body)],
     )
     assert "评测边界与诚实局限（Honest Limitations）" in text
-    assert body.strip() in text
+    assert "尚未运行，不填写通过率。" in text
+    assert "RESULTS_DEMO.md" in text
+    assert '"git_sha": "abc"' not in text
     assert '"status": "not_run"' in text
     assert "1 test collected in 0.01s" in text
     assert "collected `1`" in text

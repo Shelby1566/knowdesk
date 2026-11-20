@@ -1,0 +1,15 @@
+{
+  "key": "knowdesk_graph_hybrid",
+  "label": "KnowDesk-LangGraph (knowdesk_graph + 自研混合检索 + Fail-Closed Guard)",
+  "agent": "knowdesk_graph",
+  "retrieval": "hybrid",
+  "prompt_version": "v2",
+  "guard_mode": "1",
+  "compaction_mode": "0",
+  "pass_1": 0.1,
+  "action_exact_recall": 0.6152975412387177,
+  "action_name_recall": 0.8092156084656085,
+  "results_path": "/home/john/projects/tau2-bench/data/simulations/banking_knowledge_default_knowdesk_graph_hybrid_pv2_ms60_g1_c0_n30_t1_7318a917/results.json",
+  "max_steps": 60,
+  "split_name": "dev30"
+}

@@ -38,9 +38,13 @@ _ERROR_PREFIXES = (
 )
 
 
-def is_tool_result_success(content: str, error_flag: bool = False) -> bool:
-    """工具结果是否可以当作成功回包，用来更新核身、解锁和幂等状态。"""
-    if error_flag:
+def is_tool_result_success(content: str, error_flag: bool = False, *, _depth: int = 0) -> bool:
+    """工具结果是否可以当作成功回包，用来更新核身、解锁和幂等状态。
+
+    MCP 业务失败常见两层：顶层 ``error is True`` / ``ok is False``，
+    或者 ``content`` 里再套一层同样的 JSON。空的内层 content 不算失败。
+    """
+    if error_flag or _depth > 6:
         return False
     text = "" if content is None else str(content).strip()
     if not text:
@@ -61,6 +65,14 @@ def is_tool_result_success(content: str, error_flag: bool = False) -> bool:
         return False
     if payload.get("verified") is False:
         return False
+    if payload.get("error") is True:
+        return False
+    if payload.get("ok") is False:
+        return False
+    inner = payload.get("content")
+    if isinstance(inner, str) and inner.strip() and inner.strip() != text:
+        if not is_tool_result_success(inner, _depth=_depth + 1):
+            return False
     return True
 
 

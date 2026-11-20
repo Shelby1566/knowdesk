@@ -94,9 +94,10 @@ class PIIRedactingSpanProcessor(SpanProcessor):
         for event in getattr(span, "_events", ()) or ():
             _rewrite_attribute_map(getattr(event, "attributes", None))
         status = getattr(span, "_status", None)
-        description = getattr(status, "description", None)
-        if description:
-            status.description = redact_pii(str(description))
+        description = getattr(status, "description", None) if status is not None else None
+        # SDK Status.description is read-only. Write the private field the property reads.
+        if description and hasattr(status, "_description"):
+            status._description = redact_pii(str(description))
 
     def shutdown(self) -> None:
         return None

@@ -1,0 +1,102 @@
+{
+  "exp_id": "x9",
+  "git_sha": "1e9cc147dd072430e3f90b170be51bdb6ac83e91",
+  "timestamp": "2026-11-20T11:18:51.763488+00:00",
+  "model": "dashscope/qwen3.8-flash",
+  "llm_args": {
+    "temperature": 0,
+    "extra_body": {
+      "enable_thinking": false
+    }
+  },
+  "seed": 42,
+  "split_name": "retail_zh_first30",
+  "task_ids": [
+    "6_zh_identity",
+    "8_zh_identity",
+    "11_zh_identity",
+    "13_zh_identity",
+    "14_zh_identity",
+    "16_zh_identity",
+    "17_zh_identity",
+    "18_zh_identity",
+    "19_zh_identity",
+    "21_zh_identity",
+    "22_zh_identity",
+    "23_zh_identity",
+    "25_zh_identity",
+    "26_zh_identity",
+    "30_zh_identity",
+    "32_zh_identity",
+    "36_zh_identity",
+    "38_zh_identity",
+    "39_zh_identity",
+    "40_zh_identity",
+    "42_zh_identity",
+    "47_zh_identity",
+    "49_zh_identity",
+    "50_zh_identity",
+    "52_zh_identity",
+    "53_zh_identity",
+    "56_zh_identity",
+    "58_zh_identity",
+    "59_zh_identity",
+    "63_zh_identity"
+  ],
+  "max_steps": 50,
+  "command": "uv run --no-sync python eval/run_x9_retail_zh.py",
+  "metrics": {
+    "tau_retail": {
+      "n": 30,
+      "scored": 30,
+      "infra_errors": 0,
+      "pass_1": 0.4,
+      "db_match": 0.4666666666666667,
+      "db_n": 30,
+      "nl_assertion": null,
+      "nl_n": 0,
+      "avg_steps": 19.0,
+      "label": "llm_agent",
+      "key": "tau_retail",
+      "bucket_counts": {
+        "infrastructure_error": 0,
+        "missing_reward": 0,
+        "max_steps": 10,
+        "db_mismatch": 16,
+        "nl_fail": 0,
+        "guard_refusal": 0,
+        "success": 12,
+        "missing_task": 0
+      }
+    },
+    "knowdesk_retail": {
+      "n": 30,
+      "scored": 30,
+      "infra_errors": 0,
+      "pass_1": 0.4666666666666667,
+      "db_match": 0.5333333333333333,
+      "db_n": 30,
+      "nl_assertion": null,
+      "nl_n": 0,
+      "avg_steps": 17.833333333333332,
+      "label": "knowdesk_graph",
+      "key": "knowdesk_retail",
+      "bucket_counts": {
+        "infrastructure_error": 0,
+        "missing_reward": 0,
+        "max_steps": 9,
+        "db_mismatch": 14,
+        "nl_fail": 0,
+        "guard_refusal": 0,
+        "success": 14,
+        "missing_task": 0
+      }
+    }
+  },
+  "git_dirty": true,
+  "nl_judge": "stripped",
+  "communicate_scorer": "substring",
+  "retrieval": "builtin",
+  "language": "zh",
+  "protocol": "dbonly"
+}

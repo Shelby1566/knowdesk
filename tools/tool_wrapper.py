@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
-from tools.schemas import StructuredToolError
+from tools.schemas import StructuredToolError, is_tool_result_success
 
 
 class RetryableToolException(Exception):
@@ -157,7 +157,8 @@ class ReliableToolExecutor:
             try:
                 raw_out = func(args)
                 out_str = raw_out if isinstance(raw_out, str) else json.dumps(raw_out, ensure_ascii=False)
-                if is_write:
+                # Business failures must not be replayed. A later retry has to hit the tool again.
+                if is_write and is_tool_result_success(out_str):
                     if self.ledger is not None:
                         self.ledger.put(session_id, idem_key, tool_name, out_str)
                     else:
