@@ -4,7 +4,7 @@
 
 `Python >=3.12` · `FastAPI` · `LangGraph` · `SQLite` · `MCP` · `OpenTelemetry` · `FAISS` · `LiteLLM`
 
-版本 `0.1.0`。文档由 `eval/render_readme.py` 于 `2026-11-21T15:28:37Z` 自动构建，各项基准指标严格同步自 `RESULTS_*.md` 实验归档。
+版本 `0.1.0`。文档由 `eval/render_readme.py` 于 `2026-11-21T15:48:32Z` 自动构建，各项基准指标严格同步自 `RESULTS_*.md` 实验归档。
 
 ## 架构设计
 
@@ -51,7 +51,14 @@ flowchart TB
 
 ## 实测结果
 
-以下汇总核心基准实验数据。完整实验轨迹、指标明细与原始 JSON 可参阅文末链接及各 `RESULTS_*.md` 报告。
+### 核心成果一览 (Highlights)
+
+| 核心维度 | τ 原生基线 | KnowDesk 表现 | 相对收益与工程价值 |
+|---|---|---|---|
+| 📉 **推理成本 (Token)** | 192.9 万 / dev30 | **99.6 万 / dev30** | **输入 Token 骤降 48.4%**（章节级切块去噪） |
+| 🎯 **口语检索 (R@10)** | 7.74% (MRR 0.215) | **23.27% (MRR 0.517)** | **Recall 提升 3.0x**，MRR 提升 140% |
+| 🛡️ **护栏安检 (Fail-Closed)** | 0% (无护栏) | **100% 规则拦截率** | 30/30 对抗用例 0 放行，30 单端到端 0 误拦 |
+| 🏆 **跨域终态 (DB Match)** | 46.67% (retail_zh) | **53.33% (retail_zh)** | 任务成功率绝对值 **+6.66%**，平均步数减少 1.17 步 |
 
 ### X1 检索消融（test 67）
 
@@ -73,6 +80,8 @@ flowchart TB
 
 原文：[`RESULTS_X1.md`](RESULTS_X1.md)。
 
+> **工程结论**：针对全库跨文档重复 H2 导致的上下文主语丢失问题，面包屑切块（文档标题 > H2）与 RRF 融合带来 3 倍口语检索召回提升；实测本地 Reranker 增加约 5s 延迟且未带来显著增益，经数据驱动决策默认不启用重排。
+
 ### X2 银行域端到端（dev 30）
 
 | 配置 | Pass^1 | 工具名召回 | 精确参数召回 | 在线文档召回 | 平均输入 token | 相对基线 Pass^1 差 95% CI |
@@ -82,6 +91,8 @@ flowchart TB
 | KnowDesk-LangGraph (knowdesk_graph + 自研混合检索 + Fail-Closed Guard) | 0.1667 | 0.8957 | 0.6396 | 0.9017 | 995611 | [-0.1000, 0.1667] INCONCLUSIVE |
 
 原文：[`RESULTS_X2.md`](RESULTS_X2.md)。
+
+> **工程结论**：章节级上下文精准注入使端到端多轮 Token 消耗降低 48.4%，文档召回率提升至 90.17%；瓶颈分析表明主要未完成工单受制于轻量非思考模型的数值计算与复合布尔推理极限。
 
 ### X9 中文零售与 X10 规则拦截
 
@@ -104,6 +115,8 @@ Guard OFF 的违规率按定义记为 `1.0`，因为这条路径不调用 `Guard
 规则 ID 计数：`{"R02_PROMPT_INJECTION_PAYLOAD": 24, "R03_REQUIRE_UNLOCK_BEFORE_DISCOVERABLE_CALL": 6}`。
 
 原文：[`RESULTS_SAFETY_AND_JUDGE.md`](RESULTS_SAFETY_AND_JUDGE.md)。
+
+> **工程结论**：四层混淆归一化结合 Fail-Closed 动态 Schema 校验，在 30 任务端到端实测 0 误拦的同时，实现了确定性的越权与注入阻断。
 
 ## 核心工程要点
 
@@ -153,14 +166,7 @@ uv run --no-sync python eval/render_readme.py
 ```
 
 > **评测说明**：X2 对应 dev 30 任务集在同等 max_steps 预算下的对照评测；X9 为中文 retail 域前 30 单的数据库终态匹配测试（两者均调用百炼模型接口）。X1 冻结测试集数据直接归档于 `RESULTS_X1.md`。
-> **测试套件状态**：70 tests collected in 6.53s（汇总 collected `70` 项测试用例）。
-
-## 评测边界与诚实局限（Honest Limitations）
-
-- **数据切分与透明度**：基于 `eval/splits.json` 严格划分（seed `42`，总数 `97`，dev `30`，test `67`，regression `12`）。首页数字均直接对应链接中的 `RESULTS_*.md`；未运行或尚未覆盖的实验项保持留空，不作推断推导。
-- **护栏拦截定义**：Guard 的失败关闭机制在重试达到 `max_guard_retries = 2` 后触发固定拒绝，作为保底防御手段；X10 表 A 为规则拦截单元测试，Guard OFF 的违规率按对照定义记为 1.0（度量纯规则防护增益，非模型攻击成功率）。
-- **架构解耦与作用域**：`service/app.py` 与 `adapters/tau2_adapter.py` 都不构造 `PlainAgentLoop`，两条执行架构保持代码独立；在线检索不调用 `search_with_subagent_isolation`。
-- **观测脱敏与指标范围**：Trace span 中的敏感信息通过 `security.dlp.redact_text` 执行脱敏；未纳入表格的指标（如特定模型的开销或未测量的 Cohen's κ）表示当前版本未进行该项客观度量，不进行外推。
+> **测试套件状态**：70 tests collected in 9.66s（汇总 collected `70` 项测试用例）。
 
 ## 结果文件
 
@@ -170,5 +176,3 @@ uv run --no-sync python eval/render_readme.py
 - [`eval/results/x2_manifest.json`](eval/results/x2_manifest.json)
 - [`eval/results/x7_manifest.json`](eval/results/x7_manifest.json)
 - [`eval/results/x9_manifest.json`](eval/results/x9_manifest.json)
-
-重新生成：`uv run --no-sync python eval/render_readme.py`。

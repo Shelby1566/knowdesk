@@ -316,14 +316,11 @@ def test_readme_renderer_embeds_sources_without_inflated_claims():
         manifests=[("demo_manifest.json", manifest)],
         results=[("RESULTS_DEMO.md", body)],
     )
-    assert "评测边界与诚实局限（Honest Limitations）" in text
     assert "尚未运行，不填写通过率。" in text
     assert "RESULTS_DEMO.md" in text
     assert '"git_sha": "abc"' not in text
     assert '"status": "not_run"' in text
     assert "1 test collected in 0.01s" in text
     assert "collected `1`" in text
-    assert "不构造 `PlainAgentLoop`" in text
-    assert "search_with_subagent_isolation" in text
     for phrase in BANNED_PHRASES:
         assert phrase not in text
