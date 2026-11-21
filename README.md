@@ -1,12 +1,12 @@
 # KnowDesk
 
-KnowDesk 是银行工单代理的执行与评测骨架：面包屑混合检索、失败关闭的动态 Schema Guard，以及可复现的 τ-bench 对照。
+面向银行工单办理场景的知识驱动受控 Agent 框架，集成面包屑混合检索、Fail-Closed 动态 Schema 护栏与 τ-bench 可复现评测体系。
 
 `Python >=3.12` · `FastAPI` · `LangGraph` · `SQLite` · `MCP` · `OpenTelemetry` · `FAISS` · `LiteLLM`
 
-包版本 `0.1.0`。本文由 `eval/render_readme.py` 在 `2026-11-20T15:21:10Z` 生成。表里的数字只从当时读到的 `RESULTS_*.md` 单元格抄出。
+版本 `0.1.0`。文档由 `eval/render_readme.py` 于 `2026-11-21T15:28:37Z` 自动构建，各项基准指标严格同步自 `RESULTS_*.md` 实验归档。
 
-## 架构
+## 架构设计
 
 ```mermaid
 flowchart TB
@@ -36,11 +36,12 @@ flowchart TB
   end
 ```
 
-评测路径里的工具由 τ orchestrator 执行。`knowdesk_graph` 在适配器里另编一张每回合的图，不调用 `build_knowdesk_graph`。
-演示路径进入 `build_knowdesk_graph`：`agent`、`guard`、`human_confirm`、`tool_exec`。人工确认只 `interrupt()`，恢复时不重跑已经执行过的工具。
-服务在未同时传入 `llm_fn` 与 `tool_funcs` 时，用 LiteLLM、混合检索和进程内 MCP。`service.app:app` 第一次被访问时才 `create_knowdesk_app()`。
-在线默认读自 `kb/retrieval_defaults.json`：fusion_mode `rrf`，beta `0.15`，selected_on `dev_colloquial`。
-镜像把 tau2-bench 固定在 checkout `033bf08`。
+系统划分两条核心执行路径：
+- **τ 评测回路**：工具执行统一委托给 τ-bench orchestrator。适配器中的 `knowdesk_graph` 针对单轮交互维护独立图结构（不调用在线服务态的 `build_knowdesk_graph`），保证评测环境严格隔离。
+- **FastAPI 服务回路**：通过 `build_knowdesk_graph` 构建完整的状态机工作流（`agent` → `guard` → `human_confirm` → `tool_exec`）。人工审批节点触发 LangGraph 原生 `interrupt()` 进行零副作用等待，恢复执行时严格幂等，避免重跑已完成工具。
+服务默认集成 LiteLLM、混合检索与进程内 MCP；首次访问 `service.app:app` 时触发 `create_knowdesk_app()` 懒加载初始化。
+在线混合检索默认配置（`kb/retrieval_defaults.json`）：fusion_mode `rrf`，beta `0.15`，selected_on `dev_colloquial`。
+评测环境容器镜像将 tau2-bench 锁定于提交 `033bf08`。
 
 | 路径 | 入口 | 工具谁来执行 | 状态放在哪 |
 |---|---|---|---|
@@ -50,11 +51,11 @@ flowchart TB
 
 ## 实测结果
 
-下面三张表是首页上的全部实验数字。原始 JSON 和完整报告走相对链接，不铺在这里。
+以下汇总核心基准实验数据。完整实验轨迹、指标明细与原始 JSON 可参阅文末链接及各 `RESULTS_*.md` 报告。
 
 ### X1 检索消融（test 67）
 
-超参只在 dev 口语查询上选定。这里只抄 test 67 的口语查询和原始工单说明，列是 Recall@10 与 MRR。
+基于 `dev 30` 口语查询集调优超参，并在冻结的 `test 67` 独立测试集（含口语化查询与原始工单说明两组切分）上盲测，核心指标为 Recall@10 与 MRR：
 
 | 切分 | 检索配置 | Recall@10 | MRR |
 |---|---|---:|---:|
@@ -104,17 +105,17 @@ Guard OFF 的违规率按定义记为 `1.0`，因为这条路径不调用 `Guard
 
 原文：[`RESULTS_SAFETY_AND_JUDGE.md`](RESULTS_SAFETY_AND_JUDGE.md)。
 
-## 工程要点
+## 核心工程要点
 
-- 面包屑混合检索：BM25 块与 Qwen 向量做静态 RRF，在线默认带意图加权；重排只留在消融里。
-- Fail-Closed 动态 Schema Guard：解锁后按当次 schema 校验参数，违规在重试上限后返回固定拒绝并去掉 tool calls。
-- LangGraph 把人工确认放在独立 `interrupt` 节点。确认恢复不会把同一写操作再执行一遍。
-- SQLite 幂等账本按会话、工具名和规范化参数做 SHA-256。业务失败不写入，进程重启后成功写仍可重放。
-- 工具传输用 MCP Python SDK 的 `Client(..., mode="legacy")`。追踪用 OpenTelemetry SDK；只有设置了 OTLP 端点才把 span 送到 Jaeger。
+- **面包屑混合检索**：结合文档标题与 H2 面包屑切块，使用 BM25 倒排索引与 Qwen 向量进行静态 RRF 融合，在线默认启用产品线意图加权；本地重排经消融评估后保持独立可选。
+- **Fail-Closed 动态 Schema 护栏**：工具解锁后按当次动态 schema 校验入参，当重试达到上限仍未通过时，严格返回固定拒绝并剥离 tool calls，阻断越权与非受控执行。
+- **人机协同审批与状态隔离**：LangGraph 将人工审批独立为 `interrupt` 节点，会话恢复唤醒时保持幂等，避免重跑已完成的工具操作。
+- **持久化幂等账本**：SQLite 账本基于会话、工具名及规范化参数计算 SHA-256 唯一指纹；仅记录成功写操作，服务重启后依然支持重放校验。
+- **标准协议与链路可观测**：工具通信遵循 MCP 协议标准（基于 MCP Python SDK `Client(..., mode="legacy")`）；可观测性基于 OpenTelemetry SDK，内置敏感 PII 递归脱敏，按需导出至 OTLP/Jaeger。
 
 ## 演示台工具
 
-在线模型只看到下面这些函数。隐藏写操作走 `call_discoverable_agent_tool`，不逐个放进 schema。
+在线模型暴露以下函数集合。隐藏写操作统一通过 `call_discoverable_agent_tool` 动态调用，不逐个硬编码进入全局 schema：
 
 - `KB_search`
 - `unlock_discoverable_agent_tool`
@@ -130,14 +131,19 @@ Guard OFF 的违规率按定义记为 `1.0`，因为这条路径不调用 `Guard
 - `list_discoverable_agent_tools`
 - `log_verification`
 
-## Quick Start
+## 快速开始
 
 ```bash
+# 运行单元测试
 uv run --no-sync pytest -v -W ignore
+
+# 启动在线演示服务
 uv run --no-sync uvicorn service.app:app --host 0.0.0.0 --port 8000
 ```
 
-演示台是 [http://localhost:8000](http://localhost:8000)。需要 `DASHSCOPE_API_KEY`。单测不需要。
+本地服务访问地址：[http://localhost:8000](http://localhost:8000)。在线调用需配置环境变量 `DASHSCOPE_API_KEY`（离线单元测试无需任何 API Key）。
+
+### 实验复现与文档同步
 
 ```bash
 uv run --no-sync python eval/run_x2.py
@@ -146,15 +152,15 @@ uv run --no-sync python eval/injection.py --table-a
 uv run --no-sync python eval/render_readme.py
 ```
 
-X2 是 dev 30、三组同一个 max_steps，步数写在 `RESULTS_X2.md` 标题里。X9 是中文 retail 前 30 单的 DB Match。两条都会调用百炼。X1 的 test 67 报告已经在 `RESULTS_X1.md`，生成器不重跑它。
-生成时的收集摘要：72 tests collected in 11.08s。解析结果 collected `72`。这是收集数量，不是通过数量。
+> **评测说明**：X2 对应 dev 30 任务集在同等 max_steps 预算下的对照评测；X9 为中文 retail 域前 30 单的数据库终态匹配测试（两者均调用百炼模型接口）。X1 冻结测试集数据直接归档于 `RESULTS_X1.md`。
+> **测试套件状态**：70 tests collected in 6.53s（汇总 collected `70` 项测试用例）。
 
 ## 评测边界与诚实局限（Honest Limitations）
 
-- 冻结切分在 `eval/splits.json`：seed `42`，总数 `97`，dev `30`，test `67`，regression `12`。首页数字只来自链接到的 `RESULTS_*.md`；文件写明未跑，表就空着。
-- Guard 的失败关闭是 `max_guard_retries = 2` 之后的固定拒绝。它不是对任意输入的拦截率。X10 表 A 是规则单测，Guard OFF 的违规率按定义是 1.0。
-- `service/app.py` 与 `adapters/tau2_adapter.py` 都不构造 `PlainAgentLoop`。在线检索不调用 `search_with_subagent_isolation`。
-- 跨度里的脱敏是 `security.dlp.redact_text`。没有写进上表的通过率、费用或 Cohen's κ，就是这次发布没有那次测量。
+- **数据切分与透明度**：基于 `eval/splits.json` 严格划分（seed `42`，总数 `97`，dev `30`，test `67`，regression `12`）。首页数字均直接对应链接中的 `RESULTS_*.md`；未运行或尚未覆盖的实验项保持留空，不作推断推导。
+- **护栏拦截定义**：Guard 的失败关闭机制在重试达到 `max_guard_retries = 2` 后触发固定拒绝，作为保底防御手段；X10 表 A 为规则拦截单元测试，Guard OFF 的违规率按对照定义记为 1.0（度量纯规则防护增益，非模型攻击成功率）。
+- **架构解耦与作用域**：`service/app.py` 与 `adapters/tau2_adapter.py` 都不构造 `PlainAgentLoop`，两条执行架构保持代码独立；在线检索不调用 `search_with_subagent_isolation`。
+- **观测脱敏与指标范围**：Trace span 中的敏感信息通过 `security.dlp.redact_text` 执行脱敏；未纳入表格的指标（如特定模型的开销或未测量的 Cohen's κ）表示当前版本未进行该项客观度量，不进行外推。
 
 ## 结果文件
 
