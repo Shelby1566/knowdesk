@@ -579,7 +579,7 @@ def build_readme(
         "uv run --no-sync python eval/render_readme.py",
         "```",
         "",
-        "X2 是 dev 30、max_steps=60、三组同条件。X9 是中文 retail 前 30 单的 DB Match。两条都会调用百炼。X1 的 test 67 报告已经在 `RESULTS_X1.md`，生成器不重跑它。",
+        "X2 是 dev 30、三组同一个 max_steps，步数写在 `RESULTS_X2.md` 标题里。X9 是中文 retail 前 30 单的 DB Match。两条都会调用百炼。X1 的 test 67 报告已经在 `RESULTS_X1.md`，生成器不重跑它。",
         f"生成时的收集摘要：{collected_line}。解析结果 collected `{counts['collected']}`。这是收集数量，不是通过数量。",
         "",
         "## 评测边界与诚实局限（Honest Limitations）",

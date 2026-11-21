@@ -1,4 +1,4 @@
-"""X2 dev-30 comparison. Three cells, max_steps=60.
+"""X2 dev-30 comparison. Three cells, max_steps=90.
 
 Running this file calls Bailian. It does not fill missing tasks with reward 0.
 The five-cell list in eval/x2_protocol.py stays available for X3; this entrypoint
@@ -30,7 +30,9 @@ from kb.loader import load_documents
 ROOT = Path(__file__).resolve().parents[1]
 REPORT_PATH = ROOT / "RESULTS_X2.md"
 SELECTED_PATH = Path(__file__).resolve().parent / "results" / "x2_selected.json"
-RELEASE_MAX_STEPS = 60
+# 60 stopped 18/30 graph runs while later writes were still pending. Guard and
+# section truncation were not the argument errors. 90 keeps the same three cells.
+RELEASE_MAX_STEPS = 90
 RELEASE_CELL_KEYS = (
     "llm_agent_builtin",
     "knowdesk_plain_hybrid",
@@ -142,6 +144,7 @@ def main() -> None:
         f"# X2 dev 30（max_steps={RELEASE_MAX_STEPS}，temperature=0，思考关闭，模型 `{DEFAULT_MODEL}`）",
         "",
         "三组使用同一批 dev 30、同一个 max_steps。Pass^1 是任务奖励均值。",
+        "步数上限是 90。上一轮 60 步时，knowdesk_graph 有 18/30 条在上限结束。检索、Guard 和模型没有改。",
         "配对 Bootstrap 是候选减 τ 基线，10000 次、种子 42、95% 区间。基线行没有对照差。",
         f"按 Pass^1、精确参数召回、工具名召回选出的配置是 `{selected['key']}`。",
         "",

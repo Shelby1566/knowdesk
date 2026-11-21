@@ -4,7 +4,7 @@ KnowDesk 是银行工单代理的执行与评测骨架：面包屑混合检索�
 
 `Python >=3.12` · `FastAPI` · `LangGraph` · `SQLite` · `MCP` · `OpenTelemetry` · `FAISS` · `LiteLLM`
 
-包版本 `0.1.0`。本文由 `eval/render_readme.py` 在 `2026-11-20T11:41:45Z` 生成。表里的数字只从当时读到的 `RESULTS_*.md` 单元格抄出。
+包版本 `0.1.0`。本文由 `eval/render_readme.py` 在 `2026-11-20T15:21:10Z` 生成。表里的数字只从当时读到的 `RESULTS_*.md` 单元格抄出。
 
 ## 架构
 
@@ -76,9 +76,9 @@ flowchart TB
 
 | 配置 | Pass^1 | 工具名召回 | 精确参数召回 | 在线文档召回 | 平均输入 token | 相对基线 Pass^1 差 95% CI |
 |---|---:|---:|---:|---:|---:|---|
-| τ 原生基线 (llm_agent + 内置 BM25) | 0.1000 | 0.7303 | 0.5327 | 0.7364 | 1159547 | n/a（对照） |
-| KnowDesk-Plain (knowdesk_plain + 自研混合检索 + Fail-Closed Guard) | 0.0667 | 0.7321 | 0.5638 | 0.8535 | 883186 | [-0.1333, 0.0667] INCONCLUSIVE |
-| KnowDesk-LangGraph (knowdesk_graph + 自研混合检索 + Fail-Closed Guard) | 0.1000 | 0.8092 | 0.6153 | 0.7794 | 770005 | [-0.1000, 0.1000] INCONCLUSIVE |
+| τ 原生基线 (llm_agent + 内置 BM25) | 0.1333 | 0.8539 | 0.6408 | 0.7657 | 1928673 | n/a（对照） |
+| KnowDesk-Plain (knowdesk_plain + 自研混合检索 + Fail-Closed Guard) | 0.1667 | 0.8832 | 0.6802 | 0.8928 | 1112684 | [-0.1333, 0.2000] INCONCLUSIVE |
+| KnowDesk-LangGraph (knowdesk_graph + 自研混合检索 + Fail-Closed Guard) | 0.1667 | 0.8957 | 0.6396 | 0.9017 | 995611 | [-0.1000, 0.1667] INCONCLUSIVE |
 
 原文：[`RESULTS_X2.md`](RESULTS_X2.md)。
 
@@ -146,8 +146,8 @@ uv run --no-sync python eval/injection.py --table-a
 uv run --no-sync python eval/render_readme.py
 ```
 
-X2 是 dev 30、max_steps=60、三组同条件。X9 是中文 retail 前 30 单的 DB Match。两条都会调用百炼。X1 的 test 67 报告已经在 `RESULTS_X1.md`，生成器不重跑它。
-生成时的收集摘要：72 tests collected in 9.54s。解析结果 collected `72`。这是收集数量，不是通过数量。
+X2 是 dev 30、三组同一个 max_steps，步数写在 `RESULTS_X2.md` 标题里。X9 是中文 retail 前 30 单的 DB Match。两条都会调用百炼。X1 的 test 67 报告已经在 `RESULTS_X1.md`，生成器不重跑它。
+生成时的收集摘要：72 tests collected in 11.08s。解析结果 collected `72`。这是收集数量，不是通过数量。
 
 ## 评测边界与诚实局限（Honest Limitations）
 
