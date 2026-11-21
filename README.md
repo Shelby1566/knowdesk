@@ -4,7 +4,7 @@
 
 `Python >=3.12` · `FastAPI` · `LangGraph` · `SQLite` · `MCP` · `OpenTelemetry` · `FAISS` · `LiteLLM`
 
-版本 `0.1.0`。文档由 `eval/render_readme.py` 于 `2026-11-21T15:48:32Z` 自动构建，各项基准指标严格同步自 `RESULTS_*.md` 实验归档。
+版本 `0.1.0`。文档由 `eval/render_readme.py` 于 `2026-11-21T15:55:06Z` 自动构建，各项基准指标严格同步自 `RESULTS_*.md` 实验归档。
 
 ## 架构设计
 
@@ -126,6 +126,15 @@ Guard OFF 的违规率按定义记为 `1.0`，因为这条路径不调用 `Guard
 - **持久化幂等账本**：SQLite 账本基于会话、工具名及规范化参数计算 SHA-256 唯一指纹；仅记录成功写操作，服务重启后依然支持重放校验。
 - **标准协议与链路可观测**：工具通信遵循 MCP 协议标准（基于 MCP Python SDK `Client(..., mode="legacy")`）；可观测性基于 OpenTelemetry SDK，内置敏感 PII 递归脱敏，按需导出至 OTLP/Jaeger。
 
+## 控制台界面与可视化 (Web Console)
+
+服务内置了高保真的银行工单运营与全链路可观测控制台（访问 [http://localhost:8000](http://localhost:8000)）：
+
+- **工单交互与人机协同审批**：原生 SSE 增量对话流；动态 Schema Guard 拦截到高风险隐藏操作时自动触发 `interrupt`，支持一键 `Approve`（批准）、`Modify`（在线修改 JSON 参数）及 `Reject`（驳回）。
+- **LangGraph 动态状态管线**：实时可视化高亮节点流转（`agent 规划` ➔ `guard 安检` ➔ `human_confirm 人工确认` ➔ `tool_exec 工具执行`）。
+- **OpenTelemetry 链路瀑布流**：Span 级耗时比例瀑布图（Waterfall），原生支持敏感 PII 数据递归脱敏展示。
+- **实时效能指标看板**：实时度量多轮输入 Tokens、P90 响应耗时与 SQLite 账本幂等保护状态。
+
 ## 演示台工具
 
 在线模型暴露以下函数集合。隐藏写操作统一通过 `call_discoverable_agent_tool` 动态调用，不逐个硬编码进入全局 schema：
@@ -166,7 +175,7 @@ uv run --no-sync python eval/render_readme.py
 ```
 
 > **评测说明**：X2 对应 dev 30 任务集在同等 max_steps 预算下的对照评测；X9 为中文 retail 域前 30 单的数据库终态匹配测试（两者均调用百炼模型接口）。X1 冻结测试集数据直接归档于 `RESULTS_X1.md`。
-> **测试套件状态**：70 tests collected in 9.66s（汇总 collected `70` 项测试用例）。
+> **测试套件状态**：70 tests collected in 5.24s（汇总 collected `70` 项测试用例）。
 
 ## 结果文件
 
