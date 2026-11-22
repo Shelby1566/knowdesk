@@ -167,3 +167,38 @@ def test_p0_5_approval_resume_preserves_request_acl(tmp_path):
     assert seen_acls[0].tenant_id == "tenant_bank"
     assert seen_acls[0].user_id == "sup_1"
     assert "supervisor" in seen_acls[0].roles
+
+
+def test_p0_6_demo_mode_end_to_end_hitl_without_api_key(monkeypatch, tmp_path):
+    """验证 KNOWDESK_DEMO_MODE=1 无需 API Key 即可跑通完整 SSE -> 人工审批 -> 幂等恢复闭环"""
+    import json
+    from fastapi.testclient import TestClient
+    from knowdesk.service.app import create_knowdesk_app
+
+    monkeypatch.setenv("KNOWDESK_DEMO_MODE", "1")
+    monkeypatch.delenv("DASHSCOPE_API_KEY", raising=False)
+
+    app = create_knowdesk_app(db_path=tmp_path / "demo_mode.sqlite")
+    client = TestClient(app)
+    headers = {"x-user-id": "sup_demo", "x-tenant-id": "demo_bank", "x-role": "supervisor"}
+    sess = client.post("/sessions", headers=headers).json()["session_id"]
+
+    sse_resp = client.post(f"/sessions/{sess}/messages", headers=headers, json={"content": "Please freeze my lost card"})
+    assert sse_resp.status_code == 200
+    assert "awaiting_approval" in sse_resp.text
+
+    idem_key = None
+    for line in sse_resp.text.splitlines():
+        if line.startswith("data:") and "awaiting_approval" in line:
+            idem_key = json.loads(line[len("data:"):].strip())["pending_tool_call"]["idem_key"]
+    assert idem_key
+
+    resumed = client.post(
+        f"/sessions/{sess}/approvals",
+        headers=headers,
+        json={"decision": "approve", "idempotency_key": idem_key},
+    )
+    assert resumed.status_code == 200
+    body = resumed.json()
+    assert body["status"] == "resumed"
+    assert "card_demo_8842" in body["reply"]

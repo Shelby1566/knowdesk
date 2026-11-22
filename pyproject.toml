@@ -1,7 +1,7 @@
 [project]
 name = "knowdesk"
 version = "0.1.0"
-description = "Add your description here"
+description = "Knowledge-driven controlled banking agent framework with breadcrumb hybrid retrieval, fail-closed dynamic schema guardrails, HITL idempotency, and tau2-bench evaluation."
 readme = "README.md"
 authors = [
     { name = "Shelby1566" }

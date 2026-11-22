@@ -5,11 +5,13 @@
 **面向银行工单办理场景的知识驱动受控 Agent 框架**  
 面包屑混合检索 · Fail-Closed 动态 Schema 护栏 · 人机协同幂等状态机 · τ-bench 可复现评测
 
+![CI](https://github.com/Shelby1566/knowdesk/actions/workflows/ci.yml/badge.svg)
 ![Python](https://img.shields.io/badge/Python-%E2%89%A53.12-3776AB?style=flat-square&logo=python&logoColor=white)
 ![LangGraph](https://img.shields.io/badge/LangGraph-StateGraph-1C3C3C?style=flat-square)
 ![MCP](https://img.shields.io/badge/MCP-JSON--RPC-000000?style=flat-square)
 ![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-PII%20Redacted-425CC7?style=flat-square&logo=opentelemetry&logoColor=white)
-![Tests](https://img.shields.io/badge/pytest-74%20collected-2EA44F?style=flat-square&logo=pytest&logoColor=white)
+![Tests](https://img.shields.io/badge/pytest-75%20collected-2EA44F?style=flat-square&logo=pytest&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)
 
 [核心指标](#核心指标) · [架构设计](#架构设计) · [项目结构](#项目结构) · [基准评测](#基准评测) · [快速开始](#快速开始)
 
@@ -38,7 +40,7 @@
 | **τ-bench 评测回路** | `eval/tau_runner.py` | τ orchestrator（单轮严格隔离） | 适配器安全状态 + `InMemorySaver` |
 | **无框架原生循环** | `knowdesk.plain.loop.PlainAgentLoop` | `ReliableToolExecutor` | 可选 SQLite 幂等账本 |
 
-> **在线默认配置**：在线混合检索默认配置（`knowdesk/kb/retrieval_defaults.json`）：fusion_mode `rrf`，beta `0.15`，selected_on `dev_colloquial`。 容器镜像将 `tau2-bench` 锁定于提交 `033bf08`。
+> 在线混合检索默认配置（`knowdesk/kb/retrieval_defaults.json`）：fusion_mode `rrf`，beta `0.15`，selected_on `dev_colloquial`。 容器镜像将 `tau2-bench` 锁定于提交 `033bf08`。
 
 ### 核心工程要点
 
@@ -148,10 +150,13 @@ Guard OFF 的违规率按定义记为 `1.0`，因为这条路径不调用 `Guard
 # 1. 运行离线单元测试（无需 API Key）
 uv run --no-sync pytest -v -W ignore
 
-# 2. 启动在线服务与 Web 控制台（http://localhost:8000，在线 LLM 需配置 DASHSCOPE_API_KEY）
+# 2. 零 API Key 一键体验 Web 控制台与 HITL 审批流（http://localhost:8000）
+KNOWDESK_DEMO_MODE=1 uv run --no-sync uvicorn knowdesk.service.app:app --host 0.0.0.0 --port 8000
+
+# 3. 接入百炼大模型运行在线服务（需配置 DASHSCOPE_API_KEY）
 uv run --no-sync uvicorn knowdesk.service.app:app --host 0.0.0.0 --port 8000
 
-# 3. 或使用 Docker Compose 一键拉起服务 + Jaeger 链路追踪
+# 4. 或使用 Docker Compose 一键拉起服务 + Jaeger 链路追踪
 docker compose up --build
 ```
 
@@ -185,4 +190,4 @@ uv run --no-sync python eval/render_readme.py
 
 ---
 
-<sub>KnowDesk `v0.1.0` · 测试套件：74 tests collected in 12.84s（collected `74`）· 自动同步于 `2026-11-22T10:19:33Z`</sub>
+<sub>KnowDesk `v0.1.0` · 测试套件：75 tests collected in 7.21s（collected `75`）· 自动同步于 `2026-11-22T10:25:01Z`</sub>
