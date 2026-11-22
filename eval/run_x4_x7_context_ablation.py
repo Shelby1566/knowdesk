@@ -23,7 +23,7 @@ from eval.tau_runner import DEFAULT_LLM_ARGS, DEFAULT_MODEL, run_tau
 from eval.x2_protocol import GRAPH_HYBRID_KEY, PROTOCOL_MAX_STEPS, SEED, cell_by_key
 
 ROOT = Path(__file__).resolve().parents[1]
-REPORT_PATH = ROOT / "RESULTS_X4_X7_ABLATION.md"
+REPORT_PATH = ROOT / "docs/benchmarks/RESULTS_X4_X7_ABLATION.md"
 RESULTS_DIR = Path(__file__).resolve().parent / "results"
 X5_METRICS = RESULTS_DIR / "x5_metrics.json"
 X7_METRICS = RESULTS_DIR / "x7_metrics.json"

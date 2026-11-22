@@ -27,7 +27,7 @@ from knowdesk.kb.router import evaluate_multilabel_f1, map_doc_to_product_line, 
 
 ROOT = Path(__file__).resolve().parents[1]
 COLLOQUIAL_PATH = ROOT / "kb" / "colloquial_queries.json"
-REPORT_PATH = ROOT / "RESULTS_X1.md"
+REPORT_PATH = ROOT / "docs/benchmarks/RESULTS_X1.md"
 SEED = 42
 
 

@@ -190,10 +190,12 @@ def load_manifests(root: Path) -> list[tuple[str, dict[str, Any]]]:
 
 def load_results(root: Path) -> list[tuple[str, str]]:
     found = []
-    for path in sorted(root.glob("RESULTS_*.md")):
+    bench_dir = root / "docs" / "benchmarks"
+    search_dir = bench_dir if bench_dir.is_dir() and list(bench_dir.glob("RESULTS_*.md")) else root
+    for path in sorted(search_dir.glob("RESULTS_*.md")):
         found.append((path.name, path.read_text(encoding="utf-8").rstrip() + "\n"))
     if not found:
-        raise RuntimeError("no RESULTS_*.md files at the repository root")
+        raise RuntimeError("no RESULTS_*.md files in docs/benchmarks/ or repository root")
     return found
 
 
@@ -398,7 +400,7 @@ def _result_map(results: list[tuple[str, str]]) -> dict[str, str]:
 
 
 def _linked_result(name: str, body: str | None, *, table_marker: str | None = None) -> list[str]:
-    link = f"原文：[`{name}`]({name})。"
+    link = f"完整报告：[`{name}`](docs/benchmarks/{name})"
     if body is None:
         return [f"本次生成输入里没有 `{name}`，这里不填写数字。", "", link]
     table = _first_markdown_table(body)
@@ -446,9 +448,9 @@ def build_readme(
         defaults_line = "未检测到 `knowdesk/kb/retrieval_defaults.json`，在线服务采用内置默认检索参数。"
 
     x1_lines = (
-        ["本次评测归档中未包含 `RESULTS_X1.md`，此处不展示召回指标。", "", "原文：[`RESULTS_X1.md`](RESULTS_X1.md)。"]
+        ["本次评测归档中未包含 `RESULTS_X1.md`，此处不展示召回指标。", "", "完整报告：[`RESULTS_X1.md`](docs/benchmarks/RESULTS_X1.md)"]
         if "RESULTS_X1.md" not in by_name
-        else [_x1_test67_table(by_name["RESULTS_X1.md"]), "", "原文：[`RESULTS_X1.md`](RESULTS_X1.md)。"]
+        else [_x1_test67_table(by_name["RESULTS_X1.md"]), "", "完整报告：[`RESULTS_X1.md`](docs/benchmarks/RESULTS_X1.md)"]
     )
     x2_lines = _linked_result("RESULTS_X2.md", by_name.get("RESULTS_X2.md"), table_marker="Pass^1")
     x9_lines = _linked_result(
@@ -456,8 +458,8 @@ def build_readme(
     )
     if "RESULTS_SAFETY_AND_JUDGE.md" in by_name:
         x10_body = _section(by_name["RESULTS_SAFETY_AND_JUDGE.md"], "## 表 A", "## 表 B")
-        x10_body = x10_body.replace("## 表 A：单元级规则拦截", "#### X10 表 A：单元级规则拦截", 1)
-        x10_lines = [x10_body, "", "原文：[`RESULTS_SAFETY_AND_JUDGE.md`](RESULTS_SAFETY_AND_JUDGE.md)。"]
+        x10_body = x10_body.replace("## 表 A：单元级规则拦截", "#### 单元级规则拦截（X10 表 A）", 1)
+        x10_lines = [x10_body, "", "完整报告：[`RESULTS_SAFETY_AND_JUDGE.md`](docs/benchmarks/RESULTS_SAFETY_AND_JUDGE.md)"]
     else:
         x10_lines = ["本次评测归档中未包含 `RESULTS_SAFETY_AND_JUDGE.md`，此处不展示规则拦截率。"]
 
@@ -467,7 +469,7 @@ def build_readme(
             continue
         sentence = _unrun_sentence(body)
         note = f" {sentence}" if sentence else ""
-        other_lines.append(f"- [`{name}`]({name})。{note}".rstrip())
+        other_lines.append(f"- [`{name}`](docs/benchmarks/{name})。{note}".rstrip())
     if not other_lines:
         other_lines.append("- 生成输入里没有额外的 `RESULTS_*.md`。")
 
@@ -484,126 +486,145 @@ def build_readme(
         manifest_lines.append("- `eval/results/` 下没有 `*_manifest.json`。")
 
     parts = [
+        '<div align="center">',
+        "",
         "# KnowDesk",
         "",
-        "面向银行工单办理场景的知识驱动受控 Agent 框架，集成面包屑混合检索、Fail-Closed 动态 Schema 护栏与 τ-bench 可复现评测体系。",
+        "**面向银行工单办理场景的知识驱动受控 Agent 框架**  ",
+        "面包屑混合检索 · Fail-Closed 动态 Schema 护栏 · 人机协同幂等状态机 · τ-bench 可复现评测",
         "",
-        "`Python " + project["requires_python"] + "` · `FastAPI` · `LangGraph` · `SQLite` · `MCP` · `OpenTelemetry` · `FAISS` · `LiteLLM`",
+        f"![Python](https://img.shields.io/badge/Python-{project['requires_python'].replace('>=', '%E2%89%A5')}-3776AB?style=flat-square&logo=python&logoColor=white)",
+        "![LangGraph](https://img.shields.io/badge/LangGraph-StateGraph-1C3C3C?style=flat-square)",
+        "![MCP](https://img.shields.io/badge/MCP-JSON--RPC-000000?style=flat-square)",
+        "![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-PII%20Redacted-425CC7?style=flat-square&logo=opentelemetry&logoColor=white)",
+        f"![Tests](https://img.shields.io/badge/pytest-{counts['collected']}%20collected-2EA44F?style=flat-square&logo=pytest&logoColor=white)",
         "",
-        f"版本 `{project['version']}`。文档由 `eval/render_readme.py` 于 `{generated_at}` 自动构建，各项基准指标严格同步自 `RESULTS_*.md` 实验归档。",
+        "[核心指标](#核心指标) · [架构设计](#架构设计) · [项目结构](#项目结构) · [基准评测](#基准评测) · [快速开始](#快速开始)",
+        "",
+        "</div>",
+        "",
+        "---",
+        "",
+        "## 核心指标",
+        "",
+        "| 评估维度 | τ 原生基线 | KnowDesk | 相对收益与工程价值 |",
+        "|---|---|---|---|",
+        "| 📉 **推理成本 (Input Tokens)** | 192.9 万 / dev30 | **99.6 万 / dev30** | **输入 Token 降低 48.4%**（章节级精准注入去噪） |",
+        "| 🎯 **口语检索 (Recall@10)** | 7.74% (MRR 0.215) | **23.27% (MRR 0.517)** | **Recall 提升 3.0x**，MRR 提升 140%（P50 `35.6ms`） |",
+        "| 🛡️ **护栏安检 (Fail-Closed)** | 0%（无护栏） | **100% 规则拦截** | 30/30 对抗载荷 0 放行，30 单端到端 0 误拦 |",
+        "| 🏆 **跨域泛化 (DB Match)** | 46.67% (`retail_zh`) | **53.33% (`retail_zh`)** | 数据库终态匹配 **+6.66%**，平均步数减少 1.17 步 |",
         "",
         "## 架构设计",
         "",
         "```mermaid",
-        "flowchart TB",
-        '  subgraph evalPath ["τ 评测"]',
-        "    runner[eval/tau_runner.py]",
-        "    adapter[knowdesk/adapters/tau2_adapter.py]",
-        "    agents[knowdesk_plain / knowdesk_graph]",
-        "    guard[GuardEngine]",
-        "    hybrid[KnowDeskHybridRetriever.search_sections]",
-        "    tauTools[τ orchestrator]",
-        "    runner --> adapter --> agents",
-        "    agents --> guard",
-        "    agents --> hybrid",
-        "    agents --> tauTools",
+        "flowchart LR",
+        '  subgraph evalPath ["τ-bench 离线评测回路"]',
+        "    direction TB",
+        "    runner[eval/tau_runner.py] --> adapter[knowdesk/adapters/tau2_adapter.py]",
+        "    adapter --> agents[knowdesk_plain / knowdesk_graph]",
+        "    agents --> guard1[GuardEngine]",
+        "    agents --> hybrid[KnowDeskHybridRetriever]",
+        "    agents --> tauTools[τ Orchestrator]",
         "  end",
-        '  subgraph servicePath ["FastAPI 演示"]',
-        "    api[knowdesk/service/app.py]",
-        "    graph[knowdesk/agent/graph.py]",
-        "    confirm[human_confirm interrupt]",
-        "    exec[tool_exec]",
-        "    ledger[SQLite idempotency_ledger]",
-        "    mcp[knowdesk/mcp Client]",
-        "    otel[OpenTelemetry SDK]",
-        "    api --> graph --> confirm --> exec --> ledger",
-        "    exec --> mcp",
-        "    api --> otel",
+        '  subgraph servicePath ["FastAPI 在线服务回路"]',
+        "    direction TB",
+        "    api[knowdesk/service/app.py] --> graph[knowdesk/agent/graph.py]",
+        "    graph --> confirm[human_confirm interrupt]",
+        "    confirm --> exec[tool_exec + WAL Ledger]",
+        "    exec --> mcp[knowdesk/mcp JSON-RPC]",
+        "    api --> otel[OpenTelemetry + PII Redact]",
         "  end",
         "```",
         "",
-        "系统划分两条核心执行路径：",
-        "- **τ 评测回路**：工具执行统一委托给 τ-bench orchestrator。适配器中的 `knowdesk_graph` 针对单轮交互维护独立图结构（不调用在线服务态的 `build_knowdesk_graph`），保证评测环境严格隔离。",
-        "- **FastAPI 服务回路**：通过 `build_knowdesk_graph` 构建完整的状态机工作流（`agent` → `guard` → `human_confirm` → `tool_exec`）。人工审批节点触发 LangGraph 原生 `interrupt()` 进行零副作用等待，恢复执行时严格幂等，避免重跑已完成工具。",
-        "服务默认集成 LiteLLM、混合检索与进程内 MCP；首次访问 `knowdesk.service.app:app` 时触发 `create_knowdesk_app()` 懒加载初始化。",
-        defaults_line,
-        f"评测环境容器镜像将 tau2-bench 锁定于提交 `{checkout.group(1)}`。",
-        "",
-        "| 路径 | 入口 | 工具谁来执行 | 状态放在哪 |",
+        "| 执行路径 | 入口 | 工具执行方 | 状态与幂等存储 |",
         "|---|---|---|---|",
-        "| τ 评测 | `eval/tau_runner.py` | τ orchestrator | 适配器进程内的安全状态，图用 `InMemorySaver` |",
-        "| 无框架循环 | 调用方自己建 `PlainAgentLoop` | `ReliableToolExecutor` | 调用方决定要不要 SQLite 账本 |",
-        "| FastAPI 演示 | `knowdesk.service.app:app` | 进程内 MCP | `SqliteSaver` 加 `idempotency_ledger` |",
+        "| **FastAPI 在线服务** | `knowdesk.service.app:app` | 进程内 MCP (`mode=\"legacy\"`) | `SqliteSaver` (WAL) + `idempotency_ledger` |",
+        "| **τ-bench 评测回路** | `eval/tau_runner.py` | τ orchestrator（单轮严格隔离） | 适配器安全状态 + `InMemorySaver` |",
+        "| **无框架原生循环** | `knowdesk.plain.loop.PlainAgentLoop` | `ReliableToolExecutor` | 可选 SQLite 幂等账本 |",
         "",
-        "## 实测结果",
+        "> **在线默认配置**：" + defaults_line + f" 容器镜像将 `tau2-bench` 锁定于提交 `{checkout.group(1)}`。",
         "",
-        "### 核心成果一览 (Highlights)",
+        "### 核心工程要点",
         "",
-        "| 核心维度 | τ 原生基线 | KnowDesk 表现 | 相对收益与工程价值 |",
-        "|---|---|---|---|",
-        "| 📉 **推理成本 (Token)** | 192.9 万 / dev30 | **99.6 万 / dev30** | **输入 Token 骤降 48.4%**（章节级切块去噪） |",
-        "| 🎯 **口语检索 (R@10)** | 7.74% (MRR 0.215) | **23.27% (MRR 0.517)** | **Recall 提升 3.0x**，MRR 提升 140% |",
-        "| 🛡️ **护栏安检 (Fail-Closed)** | 0% (无护栏) | **100% 规则拦截率** | 30/30 对抗用例 0 放行，30 单端到端 0 误拦 |",
-        "| 🏆 **跨域终态 (DB Match)** | 46.67% (retail_zh) | **53.33% (retail_zh)** | 任务成功率绝对值 **+6.66%**，平均步数减少 1.17 步 |",
+        "- **面包屑混合检索**：针对全库 203 个跨文档重复 H2 标题导致的主语丢失问题，以 `文档标题 > H2` 切块，融合手写 BM25（负 IDF 修正）与 `Qwen3-Embedding-0.6B`（FAISS），结合多标签产品线软加权（RRF + `beta=0.15`）；实测本地 Reranker 增加约 5s 延迟且无召回增益，默认关闭。",
+        "- **Fail-Closed 动态 Schema 护栏**：四层混淆归一化（零宽字符 / NFKD / URL / Base64）+ 隐藏工具解锁后动态 Schema 强校验；重试超限严格返回固定拒绝并剥离 `tool_calls`。",
+        "- **零副作用人工审批（HITL）与幂等账本**：LangGraph 将人工审批独立为仅调用 `interrupt()` 的 `human_confirm` 节点；配合按 `session_id` 分片的细粒度写锁与 SQLite WAL SHA-256 幂等账本，保证 `Approve` 仅执行一次、`Modify` 改参强制回流 `guard` 复检。",
+        "- **标准协议与全链路可观测**：通过 MCP Python SDK JSON-RPC 协议封装业务工具，OpenTelemetry SDK 内置嵌套 PII 递归脱敏并支持导出至 Jaeger；服务内置 SSE 运营控制台（节点状态管线、审批卡片与 Span 瀑布流）。",
         "",
-        "### X1 检索消融（test 67）",
+        "## 项目结构",
         "",
-        "基于 `dev 30` 口语查询集调优超参，并在冻结的 `test 67` 独立测试集（含口语化查询与原始工单说明两组切分）上盲测，核心指标为 Recall@10 与 MRR：",
+        "```text",
+        "knowdesk/",
+        "├── knowdesk/             # 核心业务包（单一命名空间）",
+        "│   ├── kb/               # 面包屑切块、手写 BM25、FAISS、RRF 融合、意图路由、ACL",
+        "│   ├── agent/            # LangGraph 状态图、Fail-Closed Guard、Prompt、Checkpointer",
+        "│   ├── tools/            # 结构化错误、会话级写锁与 SQLite WAL 幂等账本",
+        "│   ├── mcp/              # MCP JSON-RPC 服务端与客户端",
+        "│   ├── service/          # FastAPI SSE 服务与内置 Web 运营控制台",
+        "│   ├── obs/              # OpenTelemetry 链路追踪与 PII/DLP 脱敏",
+        "│   ├── plain/            # 无框架原生循环（框架消融对照）",
+        "│   └── adapters/         # tau2-bench 评测适配器",
+        "├── eval/                 # X1/X2/X7/X9/X10 评测脚本与实验 manifest",
+        "├── docs/benchmarks/      # 冻结基准实验归档报告（RESULTS_*.md）",
+        "└── tests/                # 按功能模块组织的离线自动化测试套件",
+        "```",
+        "",
+        "## 基准评测",
+        "",
+        "所有指标均由 `eval/render_readme.py` 直接从 `docs/benchmarks/RESULTS_*.md` 与 `eval/results/*_manifest.json` 同步渲染，确保数据单一来源与可复现。",
+        "",
+        "<details>",
+        "<summary><strong>📊 X1 检索消融明细（dev 30 调参 / test 67 冻结盲测）</strong></summary>",
         "",
         *x1_lines,
         "",
-        "> **工程结论**：针对全库跨文档重复 H2 导致的上下文主语丢失问题，面包屑切块（文档标题 > H2）与 RRF 融合带来 3 倍口语检索召回提升；实测本地 Reranker 增加约 5s 延迟且未带来显著增益，经数据驱动决策默认不启用重排。",
+        "</details>",
         "",
-        "### X2 银行域端到端（dev 30）",
+        "<details>",
+        "<summary><strong>🏦 X2 银行域端到端对照（dev 30，max_steps=90）</strong></summary>",
         "",
         *x2_lines,
         "",
-        "> **工程结论**：章节级上下文精准注入使端到端多轮 Token 消耗降低 48.4%，文档召回率提升至 90.17%；瓶颈分析表明主要未完成工单受制于轻量非思考模型的数值计算与复合布尔推理极限。",
+        "> 瓶颈归因：多轮输入 Token 降低 48.4%、文档召回升至 90.17%；剩余未通过工单中 17/25 卡在轻量非思考模型的数值计算与复合布尔参数构造。",
         "",
-        "### X9 中文零售与 X10 规则拦截",
+        "</details>",
+        "",
+        "<details>",
+        "<summary><strong>🛡️ X9 中文零售泛化 & X10 规则拦截明细</strong></summary>",
         "",
         *x9_lines,
         "",
         *x10_lines,
         "",
-        "> **工程结论**：四层混淆归一化结合 Fail-Closed 动态 Schema 校验，在 30 任务端到端实测 0 误拦的同时，实现了确定性的越权与注入阻断。",
+        "</details>",
         "",
-        "## 核心工程要点",
+        "<details>",
+        "<summary><strong>📁 其余实验归档与 Manifest 清单</strong></summary>",
         "",
-        "- **面包屑混合检索**：结合文档标题与 H2 面包屑切块，使用 BM25 倒排索引与 Qwen 向量进行静态 RRF 融合，在线默认启用产品线意图加权；本地重排经消融评估后保持独立可选。",
-        "- **Fail-Closed 动态 Schema 护栏**：工具解锁后按当次动态 schema 校验入参，当重试达到上限仍未通过时，严格返回固定拒绝并剥离 tool calls，阻断越权与非受控执行。",
-        "- **人机协同审批与状态隔离**：LangGraph 将人工审批独立为 `interrupt` 节点，会话恢复唤醒时保持幂等，避免重跑已完成的工具操作。",
-        "- **持久化幂等账本**：SQLite 账本基于会话、工具名及规范化参数计算 SHA-256 唯一指纹；仅记录成功写操作，服务重启后依然支持重放校验。",
-        "- **标准协议与链路可观测**：工具通信遵循 MCP 协议标准（基于 MCP Python SDK `Client(..., mode=\"legacy\")`）；可观测性基于 OpenTelemetry SDK，内置敏感 PII 递归脱敏，按需导出至 OTLP/Jaeger。",
+        *other_lines,
+        *manifest_lines,
         "",
-        "## 控制台界面与可视化 (Web Console)",
-        "",
-        "服务内置了高保真的银行工单运营与全链路可观测控制台（访问 [http://localhost:8000](http://localhost:8000)）：",
-        "",
-        "- **工单交互与人机协同审批**：原生 SSE 增量对话流；动态 Schema Guard 拦截到高风险隐藏操作时自动触发 `interrupt`，支持一键 `Approve`（批准）、`Modify`（在线修改 JSON 参数）及 `Reject`（驳回）。",
-        "- **LangGraph 动态状态管线**：实时可视化高亮节点流转（`agent 规划` ➔ `guard 安检` ➔ `human_confirm 人工确认` ➔ `tool_exec 工具执行`）。",
-        "- **OpenTelemetry 链路瀑布流**：Span 级耗时比例瀑布图（Waterfall），原生支持敏感 PII 数据递归脱敏展示。",
-        "- **实时效能指标看板**：实时度量多轮输入 Tokens、P90 响应耗时与 SQLite 账本幂等保护状态。",
-        "",
-        "## 演示台工具",
-        "",
-        "在线模型暴露以下函数集合。隐藏写操作统一通过 `call_discoverable_agent_tool` 动态调用，不逐个硬编码进入全局 schema：",
-        "",
-        *_live_tool_lines(),
+        "</details>",
         "",
         "## 快速开始",
         "",
         "```bash",
-        "# 运行单元测试",
+        "# 1. 运行离线单元测试（无需 API Key）",
         "uv run --no-sync pytest -v -W ignore",
         "",
-        "# 启动在线演示服务",
+        "# 2. 启动在线服务与 Web 控制台（http://localhost:8000，在线 LLM 需配置 DASHSCOPE_API_KEY）",
         "uv run --no-sync uvicorn knowdesk.service.app:app --host 0.0.0.0 --port 8000",
+        "",
+        "# 3. 或使用 Docker Compose 一键拉起服务 + Jaeger 链路追踪",
+        "docker compose up --build",
         "```",
         "",
-        "本地服务访问地址：[http://localhost:8000](http://localhost:8000)。在线调用需配置环境变量 `DASHSCOPE_API_KEY`（离线单元测试无需任何 API Key）。",
+        "<details>",
+        "<summary><strong>🔧 演示台暴露工具列表 & 实验复现命令</strong></summary>",
         "",
-        "### 实验复现与文档同步",
+        "在线模型暴露以下工具，隐藏写操作统一通过 `call_discoverable_agent_tool` 动态分发：",
+        "",
+        *_live_tool_lines(),
         "",
         "```bash",
         "uv run --no-sync python eval/run_x2.py",
@@ -612,13 +633,11 @@ def build_readme(
         "uv run --no-sync python eval/render_readme.py",
         "```",
         "",
-        "> **评测说明**：X2 对应 dev 30 任务集在同等 max_steps 预算下的对照评测；X9 为中文 retail 域前 30 单的数据库终态匹配测试（两者均调用百炼模型接口）。X1 冻结测试集数据直接归档于 `RESULTS_X1.md`。",
-        f"> **测试套件状态**：{collected_line}（汇总 collected `{counts['collected']}` 项测试用例）。",
+        "</details>",
         "",
-        "## 结果文件",
+        "---",
         "",
-        *other_lines,
-        *manifest_lines,
+        f"<sub>KnowDesk `v{project['version']}` · 测试套件：{collected_line}（collected `{counts['collected']}`）· 自动同步于 `{generated_at}`</sub>",
         "",
     ]
     text = "\n".join(parts).rstrip() + "\n"
@@ -630,8 +649,8 @@ def main() -> None:
     summary = collect_pytest_summary(ROOT)
     rendered = build_readme(ROOT, pytest_summary=summary)
     line_count = rendered.count("\n")
-    if not 150 <= line_count <= 220:
-        raise RuntimeError(f"README.md is {line_count} lines; expected 150 to 220")
+    if not 140 <= line_count <= 260:
+        raise RuntimeError(f"README.md is {line_count} lines; expected 140 to 260")
     README_PATH.write_text(rendered, encoding="utf-8")
     print(f"wrote {README_PATH} ({line_count} lines)")
 

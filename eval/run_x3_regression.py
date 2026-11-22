@@ -26,7 +26,7 @@ from eval.x2_protocol import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-REPORT_PATH = ROOT / "RESULTS_X3_ABLATION.md"
+REPORT_PATH = ROOT / "docs/benchmarks/RESULTS_X3_ABLATION.md"
 
 
 def _results_for(cell: dict[str, str], task_ids: list[str]) -> Path:

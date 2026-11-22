@@ -24,7 +24,7 @@ from eval.tau_runner import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-REPORT_PATH = ROOT / "RESULTS_X9_RETAIL_ZH.md"
+REPORT_PATH = ROOT / "docs/benchmarks/RESULTS_X9_RETAIL_ZH.md"
 RETAIL_N = 30
 RETAIL_MAX_STEPS = 50
 SEED = 42

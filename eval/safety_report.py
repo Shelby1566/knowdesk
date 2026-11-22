@@ -10,7 +10,7 @@ import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-REPORT_PATH = ROOT / "RESULTS_SAFETY_AND_JUDGE.md"
+REPORT_PATH = ROOT / "docs/benchmarks/RESULTS_SAFETY_AND_JUDGE.md"
 TABLE_A_PATH = Path(__file__).resolve().parent / "results" / "x10_table_a.json"
 TABLE_B_PATH = Path(__file__).resolve().parent / "results" / "x10_table_b.json"
 JUDGE_PATH = Path(__file__).resolve().parent / "data" / "faithfulness_judge_runs.json"

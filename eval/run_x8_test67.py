@@ -20,7 +20,7 @@ from eval.tau_runner import DEFAULT_LLM_ARGS, DEFAULT_MODEL, run_tau
 from eval.x2_protocol import BASELINE_KEY, PROTOCOL_MAX_STEPS, SEED, cell_by_key
 
 ROOT = Path(__file__).resolve().parents[1]
-REPORT_PATH = ROOT / "RESULTS_X8_TEST67.md"
+REPORT_PATH = ROOT / "docs/benchmarks/RESULTS_X8_TEST67.md"
 RESULTS_DIR = Path(__file__).resolve().parent / "results"
 X2_SELECTED = RESULTS_DIR / "x2_selected.json"
 X5_SELECTED = RESULTS_DIR / "x5_selected.json"

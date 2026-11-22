@@ -7,7 +7,7 @@ __pycache__/
 *.sqlite
 *.db
 data/.embeddings_cache/
-obs/guard_events.jsonl
+knowdesk/obs/guard_events.jsonl
 docs/INTERVIEW_REVIEW.md
 *.egg-info/
 dist/

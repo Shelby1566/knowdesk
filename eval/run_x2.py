@@ -28,7 +28,7 @@ from eval.x2_protocol import PROTOCOL_TRIALS, SEED, cell_by_key
 from knowdesk.kb.loader import load_documents
 
 ROOT = Path(__file__).resolve().parents[1]
-REPORT_PATH = ROOT / "RESULTS_X2.md"
+REPORT_PATH = ROOT / "docs/benchmarks/RESULTS_X2.md"
 SELECTED_PATH = Path(__file__).resolve().parent / "results" / "x2_selected.json"
 # 60 stopped 18/30 graph runs while later writes were still pending. Guard and
 # section truncation were not the argument errors. 90 keeps the same three cells.
