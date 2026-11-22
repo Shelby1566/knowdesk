@@ -19,11 +19,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from eval.gate import load_splits, report_ids, require_tunable
 from eval.manifest import write_manifest
 from eval.x1_select import INTENT_BETAS, select_beta, select_fusion
-from kb.eval_retrieval import EvalQuery, load_eval_queries, recall_at_k, reciprocal_rank
-from kb.hybrid_retriever import KnowDeskHybridRetriever
-from kb.loader import load_documents
-from kb.retrieval_config import RetrievalDefaults, save_retrieval_defaults
-from kb.router import evaluate_multilabel_f1, map_doc_to_product_line, predict_product_lines_keyword
+from knowdesk.kb.eval_retrieval import EvalQuery, load_eval_queries, recall_at_k, reciprocal_rank
+from knowdesk.kb.hybrid_retriever import KnowDeskHybridRetriever
+from knowdesk.kb.loader import load_documents
+from knowdesk.kb.retrieval_config import RetrievalDefaults, save_retrieval_defaults
+from knowdesk.kb.router import evaluate_multilabel_f1, map_doc_to_product_line, predict_product_lines_keyword
 
 ROOT = Path(__file__).resolve().parents[1]
 COLLOQUIAL_PATH = ROOT / "kb" / "colloquial_queries.json"
@@ -322,7 +322,7 @@ def main() -> None:
     if not same_ranking(online_dev["ranked"], frozen["selected_row"]["ranked"]):
         raise RuntimeError("online default ranking does not match the dev-selected row")
 
-    from kb.rerank import LocalReranker
+    from knowdesk.kb.rerank import LocalReranker
 
     reranker = LocalReranker("BAAI/bge-reranker-v2-m3")
 

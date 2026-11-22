@@ -21,7 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from eval.judge import cohens_kappa
 from eval.manifest import write_manifest
 from eval.safety_report import JUDGE_PROTOCOL, write_safety_report
-from tools.schemas import FaithfulnessVerdict, validate_structured_output
+from knowdesk.tools.schemas import FaithfulnessVerdict, validate_structured_output
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = Path(__file__).resolve().parent / "data"

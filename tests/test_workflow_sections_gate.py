@@ -1,12 +1,12 @@
 import pytest
 
-from agent.guard import SecurityState
-from agent.workflow import project_messages_for_model, stage_directive
+from knowdesk.agent.guard import SecurityState
+from knowdesk.agent.workflow import project_messages_for_model, stage_directive
 from eval.gate import FrozenSplitError, load_splits, report_ids, require_tunable, tunable_ids
-from kb.chunk import Chunk
-from kb.hybrid_retriever import KnowDeskHybridRetriever
-from kb.loader import Document
-from kb.sections import format_matched_section
+from knowdesk.kb.chunk import Chunk
+from knowdesk.kb.hybrid_retriever import KnowDeskHybridRetriever
+from knowdesk.kb.loader import Document
+from knowdesk.kb.sections import format_matched_section
 
 
 def test_matched_section_is_not_the_full_document():
@@ -75,7 +75,7 @@ def test_frozen_split_blocks_test_leak():
 
 def test_section_retrieval_replaces_document_body():
     pytest.importorskip("tau2")
-    from adapters.tau2_adapter import install_section_retrieval, restore_builtin_retrieval
+    from knowdesk.adapters.tau2_adapter import install_section_retrieval, restore_builtin_retrieval
     from tau2.knowledge.pipeline import RetrievalPipeline
     from tau2.knowledge.retrievers.bm25_retriever import BM25Retriever
 

@@ -6,10 +6,10 @@ from dotenv import load_dotenv
 import litellm
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from kb.loader import load_documents, DEFAULT_TASKS_PATH
-from kb.eval_retrieval import load_eval_queries, EvalQuery
+from knowdesk.kb.loader import load_documents, DEFAULT_TASKS_PATH
+from knowdesk.kb.eval_retrieval import load_eval_queries, EvalQuery
 
-OUTPUT_PATH = Path(__file__).resolve().parents[1] / "kb/colloquial_queries.json"
+OUTPUT_PATH = Path(__file__).resolve().parents[1] / "knowdesk/kb/colloquial_queries.json"
 PROMPT_VERSION = "m4_colloquial_v1"
 MODEL_NAME = "dashscope/qwen3.8-flash"
 

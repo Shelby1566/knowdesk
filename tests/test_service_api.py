@@ -3,7 +3,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from service.app import create_knowdesk_app
+from knowdesk.service.app import create_knowdesk_app
 
 
 def _scripted_llm():

@@ -1,5 +1,5 @@
-from kb.eval_retrieval import recall_at_k, reciprocal_rank
-from kb.fusion import rrf_fusion, linear_fusion
+from knowdesk.kb.eval_retrieval import recall_at_k, reciprocal_rank
+from knowdesk.kb.fusion import rrf_fusion, linear_fusion
 
 def test_recall_and_mrr_metrics():
     gold = {"doc_a", "doc_b", "doc_c", "doc_d"}

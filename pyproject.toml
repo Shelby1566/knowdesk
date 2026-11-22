@@ -40,18 +40,8 @@ build-backend = "uv_build"
 [tool.uv.build-backend]
 module-root = ""
 module-name = [
-    "kb",
-    "agent",
-    "plain",
-    "tools",
-    "adapters",
-    "obs",
-    "service",
-    "eval",
-    "mcp_server",
-    "mcp_client",
-    "security",
     "knowdesk",
+    "eval",
 ]
 
 [tool.uv.sources]

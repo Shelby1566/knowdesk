@@ -6,9 +6,9 @@ def main() -> None:
     if cmd == "serve":
         import uvicorn
 
-        uvicorn.run("service.app:app", host="0.0.0.0", port=8000)
+        uvicorn.run("knowdesk.service.app:app", host="0.0.0.0", port=8000)
     elif cmd == "search":
-        from kb.hybrid_retriever import KnowDeskHybridRetriever
+        from knowdesk.kb.hybrid_retriever import KnowDeskHybridRetriever
 
         query = " ".join(sys.argv[2:]) or "credit card annual fee"
         for hit in KnowDeskHybridRetriever.get_instance().search(query, k=5):

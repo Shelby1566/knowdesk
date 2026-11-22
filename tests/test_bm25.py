@@ -1,7 +1,7 @@
 import math
 from rank_bm25 import BM25Okapi
-from kb.tokenize import tokenize
-from kb.bm25 import BM25Index
+from knowdesk.kb.tokenize import tokenize
+from knowdesk.kb.bm25 import BM25Index
 
 TOY_CORPUS = [
     ("doc_1", "The platinum credit card has an annual fee of 95 dollars."),

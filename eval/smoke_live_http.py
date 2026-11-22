@@ -21,7 +21,7 @@ from dotenv import load_dotenv
 
 load_dotenv(ROOT.parent / "tau2-bench" / ".env", override=False)
 os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
-from service.app import prefer_direct_dashscope
+from knowdesk.service.app import prefer_direct_dashscope
 
 prefer_direct_dashscope()
 
@@ -31,8 +31,8 @@ if not os.getenv("DASHSCOPE_API_KEY"):
 import httpx
 import uvicorn
 
-from kb.hybrid_retriever import KnowDeskHybridRetriever
-from service.app import create_knowdesk_app
+from knowdesk.kb.hybrid_retriever import KnowDeskHybridRetriever
+from knowdesk.service.app import create_knowdesk_app
 
 TICKET = (
     "客户问钻石精英卡的年费在什么条件下可以减免。"

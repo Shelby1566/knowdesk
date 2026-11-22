@@ -1,7 +1,7 @@
 import re
 import pytest
-from kb.loader import Document, load_documents, DEFAULT_DOCS_DIR
-from kb.chunk import Chunk, chunk_document, chunk_corpus
+from knowdesk.kb.loader import Document, load_documents, DEFAULT_DOCS_DIR
+from knowdesk.kb.chunk import Chunk, chunk_document, chunk_corpus
 
 def test_single_doc_with_intro_and_two_h2():
     """Test case 1: 含引言 + 2个H2的文档，切出3块，面包屑正确"""

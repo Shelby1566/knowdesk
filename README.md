@@ -4,7 +4,7 @@
 
 `Python >=3.12` · `FastAPI` · `LangGraph` · `SQLite` · `MCP` · `OpenTelemetry` · `FAISS` · `LiteLLM`
 
-版本 `0.1.0`。文档由 `eval/render_readme.py` 于 `2026-11-21T15:55:06Z` 自动构建，各项基准指标严格同步自 `RESULTS_*.md` 实验归档。
+版本 `0.1.0`。文档由 `eval/render_readme.py` 于 `2026-11-22T09:14:13Z` 自动构建，各项基准指标严格同步自 `RESULTS_*.md` 实验归档。
 
 ## 架构设计
 
@@ -12,7 +12,7 @@
 flowchart TB
   subgraph evalPath ["τ 评测"]
     runner[eval/tau_runner.py]
-    adapter[adapters/tau2_adapter.py]
+    adapter[knowdesk/adapters/tau2_adapter.py]
     agents[knowdesk_plain / knowdesk_graph]
     guard[GuardEngine]
     hybrid[KnowDeskHybridRetriever.search_sections]
@@ -23,12 +23,12 @@ flowchart TB
     agents --> tauTools
   end
   subgraph servicePath ["FastAPI 演示"]
-    api[service/app.py]
-    graph[agent/graph.py]
+    api[knowdesk/service/app.py]
+    graph[knowdesk/agent/graph.py]
     confirm[human_confirm interrupt]
     exec[tool_exec]
     ledger[SQLite idempotency_ledger]
-    mcp[mcp_client Client]
+    mcp[knowdesk/mcp Client]
     otel[OpenTelemetry SDK]
     api --> graph --> confirm --> exec --> ledger
     exec --> mcp
@@ -39,15 +39,15 @@ flowchart TB
 系统划分两条核心执行路径：
 - **τ 评测回路**：工具执行统一委托给 τ-bench orchestrator。适配器中的 `knowdesk_graph` 针对单轮交互维护独立图结构（不调用在线服务态的 `build_knowdesk_graph`），保证评测环境严格隔离。
 - **FastAPI 服务回路**：通过 `build_knowdesk_graph` 构建完整的状态机工作流（`agent` → `guard` → `human_confirm` → `tool_exec`）。人工审批节点触发 LangGraph 原生 `interrupt()` 进行零副作用等待，恢复执行时严格幂等，避免重跑已完成工具。
-服务默认集成 LiteLLM、混合检索与进程内 MCP；首次访问 `service.app:app` 时触发 `create_knowdesk_app()` 懒加载初始化。
-在线混合检索默认配置（`kb/retrieval_defaults.json`）：fusion_mode `rrf`，beta `0.15`，selected_on `dev_colloquial`。
+服务默认集成 LiteLLM、混合检索与进程内 MCP；首次访问 `knowdesk.service.app:app` 时触发 `create_knowdesk_app()` 懒加载初始化。
+在线混合检索默认配置（`knowdesk/kb/retrieval_defaults.json`）：fusion_mode `rrf`，beta `0.15`，selected_on `dev_colloquial`。
 评测环境容器镜像将 tau2-bench 锁定于提交 `033bf08`。
 
 | 路径 | 入口 | 工具谁来执行 | 状态放在哪 |
 |---|---|---|---|
 | τ 评测 | `eval/tau_runner.py` | τ orchestrator | 适配器进程内的安全状态，图用 `InMemorySaver` |
 | 无框架循环 | 调用方自己建 `PlainAgentLoop` | `ReliableToolExecutor` | 调用方决定要不要 SQLite 账本 |
-| FastAPI 演示 | `service.app:app` | 进程内 MCP | `SqliteSaver` 加 `idempotency_ledger` |
+| FastAPI 演示 | `knowdesk.service.app:app` | 进程内 MCP | `SqliteSaver` 加 `idempotency_ledger` |
 
 ## 实测结果
 
@@ -160,7 +160,7 @@ Guard OFF 的违规率按定义记为 `1.0`，因为这条路径不调用 `Guard
 uv run --no-sync pytest -v -W ignore
 
 # 启动在线演示服务
-uv run --no-sync uvicorn service.app:app --host 0.0.0.0 --port 8000
+uv run --no-sync uvicorn knowdesk.service.app:app --host 0.0.0.0 --port 8000
 ```
 
 本地服务访问地址：[http://localhost:8000](http://localhost:8000)。在线调用需配置环境变量 `DASHSCOPE_API_KEY`（离线单元测试无需任何 API Key）。
@@ -175,7 +175,7 @@ uv run --no-sync python eval/render_readme.py
 ```
 
 > **评测说明**：X2 对应 dev 30 任务集在同等 max_steps 预算下的对照评测；X9 为中文 retail 域前 30 单的数据库终态匹配测试（两者均调用百炼模型接口）。X1 冻结测试集数据直接归档于 `RESULTS_X1.md`。
-> **测试套件状态**：70 tests collected in 5.24s（汇总 collected `70` 项测试用例）。
+> **测试套件状态**：74 tests collected in 13.01s（汇总 collected `74` 项测试用例）。
 
 ## 结果文件
 

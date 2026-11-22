@@ -284,7 +284,7 @@ def run_tau(
     os.environ["KNOWDESK_PROMPT_VERSION"] = "v2" if prompt_version == "tau" else prompt_version
     os.environ["KNOWDESK_GUARD"] = guard_mode
     os.environ["KNOWDESK_COMPACTION"] = compaction_mode
-    from adapters.tau2_adapter import patch_retrieval_mode, register_knowdesk_components
+    from knowdesk.adapters.tau2_adapter import patch_retrieval_mode, register_knowdesk_components
 
     register_knowdesk_components()
     patch_retrieval_mode("hybrid" if retrieval == "hybrid" else "builtin")

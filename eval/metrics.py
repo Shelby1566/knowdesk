@@ -1,8 +1,8 @@
 import json
 from pathlib import Path
 from typing import Any
-from agent.guard import unwrap_tool_call
-from kb.loader import DEFAULT_TASKS_PATH, load_documents
+from knowdesk.agent.guard import unwrap_tool_call
+from knowdesk.kb.loader import DEFAULT_TASKS_PATH, load_documents
 
 def load_tasks_map(tasks_path: Path = DEFAULT_TASKS_PATH) -> dict[str, dict[str, Any]]:
     raw = json.loads(tasks_path.read_text(encoding="utf-8"))

@@ -27,7 +27,12 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 README_PATH = ROOT / "README.md"
-PYTEST_COLLECT = ("uv", "run", "--no-sync", "pytest", "--collect-only", "-q")
+import shutil
+PYTEST_COLLECT = (
+    ("uv", "run", "--no-sync", "pytest", "--collect-only", "-q")
+    if shutil.which("uv")
+    else (sys.executable, "-m", "pytest", "--collect-only", "-q")
+)
 
 BANNED_PHRASES = (
     "零幻觉",
@@ -43,51 +48,51 @@ BANNED_PHRASES = (
 )
 
 ABSENT_SOURCES = (
-    "agent/swarm.py",
-    "agent/reflection.py",
-    "agent/model_armor.py",
-    "kb/graph.py",
-    "service/prefetch.py",
-    "service/grpc_service.py",
+    "knowdesk/agent/swarm.py",
+    "knowdesk/agent/reflection.py",
+    "knowdesk/agent/model_armor.py",
+    "knowdesk/kb/graph.py",
+    "knowdesk/service/prefetch.py",
+    "knowdesk/service/grpc_service.py",
     "eval/shadow_eval.py",
     "eval/red_team.py",
     "proto/knowdesk.proto",
-    "tools/eligibility.py",
+    "knowdesk/tools/eligibility.py",
 )
 
 WIRED_SYMBOLS = (
-    ("adapters/tau2_adapter.py", "def register_knowdesk_components"),
-    ("adapters/tau2_adapter.py", "def _fail_closed_message"),
-    ("adapters/tau2_adapter.py", "knowdesk_section_excerpts"),
-    ("adapters/tau2_adapter.py", "KNOWDESK_COMPACTION"),
-    ("adapters/tau2_adapter.py", "self.max_guard_retries = 2"),
-    ("agent/graph.py", 'builder.add_node("agent"'),
-    ("agent/graph.py", 'builder.add_node("guard"'),
-    ("agent/graph.py", 'builder.add_node("human_confirm"'),
-    ("agent/graph.py", 'builder.add_node("tool_exec"'),
-    ("plain/loop.py", "class PlainAgentLoop"),
-    ("tools/tool_wrapper.py", "def compute_idempotency_key"),
-    ("agent/checkpointer.py", "refusing to fall back to sqlite"),
-    ("service/app.py", "text/event-stream"),
-    ("service/app.py", "def create_knowdesk_app"),
-    ("service/app.py", "cost_rmb=0.0"),
-    ("service/app.py", "build_knowdesk_graph("),
-    ("mcp_client/client.py", 'mode="legacy"'),
-    ("mcp_server/server.py", "def create_knowdesk_mcp_server"),
-    ("obs/otel_setup.py", "OTLPSpanExporter"),
-    ("obs/otel_setup.py", "class PIIRedactingSpanProcessor"),
-    ("security/dlp.py", "def redact_text"),
-    ("kb/hybrid_retriever.py", "def search_sections"),
-    ("kb/hybrid_retriever.py", "def search_with_subagent_isolation"),
-    ("kb/vectorstore.py", 'IndexType = Literal["flat", "hnsw"]'),
+    ("knowdesk/adapters/tau2_adapter.py", "def register_knowdesk_components"),
+    ("knowdesk/adapters/tau2_adapter.py", "def _fail_closed_message"),
+    ("knowdesk/adapters/tau2_adapter.py", "knowdesk_section_excerpts"),
+    ("knowdesk/adapters/tau2_adapter.py", "KNOWDESK_COMPACTION"),
+    ("knowdesk/adapters/tau2_adapter.py", "self.max_guard_retries = 2"),
+    ("knowdesk/agent/graph.py", 'builder.add_node("agent"'),
+    ("knowdesk/agent/graph.py", 'builder.add_node("guard"'),
+    ("knowdesk/agent/graph.py", 'builder.add_node("human_confirm"'),
+    ("knowdesk/agent/graph.py", 'builder.add_node("tool_exec"'),
+    ("knowdesk/plain/loop.py", "class PlainAgentLoop"),
+    ("knowdesk/tools/tool_wrapper.py", "def compute_idempotency_key"),
+    ("knowdesk/agent/checkpointer.py", "refusing to fall back to sqlite"),
+    ("knowdesk/service/app.py", "text/event-stream"),
+    ("knowdesk/service/app.py", "def create_knowdesk_app"),
+    ("knowdesk/service/app.py", "cost_rmb=0.0"),
+    ("knowdesk/service/app.py", "build_knowdesk_graph("),
+    ("knowdesk/mcp/client.py", 'mode="legacy"'),
+    ("knowdesk/mcp/server.py", "def create_knowdesk_mcp_server"),
+    ("knowdesk/obs/otel_setup.py", "OTLPSpanExporter"),
+    ("knowdesk/obs/otel_setup.py", "class PIIRedactingSpanProcessor"),
+    ("knowdesk/obs/dlp.py", "def redact_text"),
+    ("knowdesk/kb/hybrid_retriever.py", "def search_sections"),
+    ("knowdesk/kb/hybrid_retriever.py", "def search_with_subagent_isolation"),
+    ("knowdesk/kb/vectorstore.py", 'IndexType = Literal["flat", "hnsw"]'),
 )
 
 # Symbol must not appear in these files. The implementation may still exist elsewhere.
 NOT_REFERENCED = (
-    ("search_with_subagent_isolation", ("adapters/tau2_adapter.py", "service/app.py", "agent/graph.py", "plain/loop.py")),
-    ("SensitiveDataVault", ("adapters/tau2_adapter.py", "service/app.py", "obs/otel_setup.py", "agent/graph.py", "plain/loop.py")),
-    ("PlainAgentLoop", ("adapters/tau2_adapter.py", "service/app.py")),
-    ("build_knowdesk_graph", ("adapters/tau2_adapter.py", "plain/loop.py")),
+    ("search_with_subagent_isolation", ("knowdesk/adapters/tau2_adapter.py", "knowdesk/service/app.py", "knowdesk/agent/graph.py", "knowdesk/plain/loop.py")),
+    ("SensitiveDataVault", ("knowdesk/adapters/tau2_adapter.py", "knowdesk/service/app.py", "knowdesk/obs/otel_setup.py", "knowdesk/agent/graph.py", "knowdesk/plain/loop.py")),
+    ("PlainAgentLoop", ("knowdesk/adapters/tau2_adapter.py", "knowdesk/service/app.py")),
+    ("build_knowdesk_graph", ("knowdesk/adapters/tau2_adapter.py", "knowdesk/plain/loop.py")),
 )
 
 
@@ -117,12 +122,12 @@ def verify_wiring(root: Path) -> None:
         for rel in rels:
             if symbol in _read(root, rel):
                 raise RuntimeError(f"{rel} now references {symbol}; update the path boundary")
-    adapter = _read(root, "adapters/tau2_adapter.py")
+    adapter = _read(root, "knowdesk/adapters/tau2_adapter.py")
     if "KnowDeskHybridRetriever.get_instance()" not in adapter:
         raise RuntimeError("tau adapter no longer uses the process-global retriever")
     if "search_sections(" not in adapter:
         raise RuntimeError("tau adapter no longer calls search_sections")
-    service = _read(root, "service/app.py")
+    service = _read(root, "knowdesk/service/app.py")
     if "def __getattr__" not in service or 'name == "app"' not in service:
         raise RuntimeError("service.app:app is no longer a lazy create_knowdesk_app()")
     if "request_acl" not in service:
@@ -193,7 +198,7 @@ def load_results(root: Path) -> list[tuple[str, str]]:
 
 
 def retrieval_defaults_text(root: Path) -> str | None:
-    path = root / "kb" / "retrieval_defaults.json"
+    path = root / "knowdesk" / "kb" / "retrieval_defaults.json"
     if not path.is_file():
         return None
     return path.read_text(encoding="utf-8").rstrip() + "\n"
@@ -383,7 +388,7 @@ def _x1_test67_table(body: str) -> str:
 
 
 def _live_tool_lines() -> list[str]:
-    from service.app import LIVE_OPENAI_TOOLS
+    from knowdesk.service.app import LIVE_OPENAI_TOOLS
 
     return [f"- `{item['function']['name']}`" for item in LIVE_OPENAI_TOOLS]
 
@@ -433,12 +438,12 @@ def build_readme(
     if defaults:
         defaults_data = json.loads(defaults)
         defaults_line = (
-            "在线混合检索默认配置（`kb/retrieval_defaults.json`）："
+            "在线混合检索默认配置（`knowdesk/kb/retrieval_defaults.json`）："
             f"fusion_mode `{defaults_data['fusion_mode']}`，beta `{defaults_data['beta']}`，"
             f"selected_on `{defaults_data['selected_on']}`。"
         )
     else:
-        defaults_line = "未检测到 `kb/retrieval_defaults.json`，在线服务采用内置默认检索参数。"
+        defaults_line = "未检测到 `knowdesk/kb/retrieval_defaults.json`，在线服务采用内置默认检索参数。"
 
     x1_lines = (
         ["本次评测归档中未包含 `RESULTS_X1.md`，此处不展示召回指标。", "", "原文：[`RESULTS_X1.md`](RESULTS_X1.md)。"]
@@ -493,7 +498,7 @@ def build_readme(
         "flowchart TB",
         '  subgraph evalPath ["τ 评测"]',
         "    runner[eval/tau_runner.py]",
-        "    adapter[adapters/tau2_adapter.py]",
+        "    adapter[knowdesk/adapters/tau2_adapter.py]",
         "    agents[knowdesk_plain / knowdesk_graph]",
         "    guard[GuardEngine]",
         "    hybrid[KnowDeskHybridRetriever.search_sections]",
@@ -504,12 +509,12 @@ def build_readme(
         "    agents --> tauTools",
         "  end",
         '  subgraph servicePath ["FastAPI 演示"]',
-        "    api[service/app.py]",
-        "    graph[agent/graph.py]",
+        "    api[knowdesk/service/app.py]",
+        "    graph[knowdesk/agent/graph.py]",
         "    confirm[human_confirm interrupt]",
         "    exec[tool_exec]",
         "    ledger[SQLite idempotency_ledger]",
-        "    mcp[mcp_client Client]",
+        "    mcp[knowdesk/mcp Client]",
         "    otel[OpenTelemetry SDK]",
         "    api --> graph --> confirm --> exec --> ledger",
         "    exec --> mcp",
@@ -520,7 +525,7 @@ def build_readme(
         "系统划分两条核心执行路径：",
         "- **τ 评测回路**：工具执行统一委托给 τ-bench orchestrator。适配器中的 `knowdesk_graph` 针对单轮交互维护独立图结构（不调用在线服务态的 `build_knowdesk_graph`），保证评测环境严格隔离。",
         "- **FastAPI 服务回路**：通过 `build_knowdesk_graph` 构建完整的状态机工作流（`agent` → `guard` → `human_confirm` → `tool_exec`）。人工审批节点触发 LangGraph 原生 `interrupt()` 进行零副作用等待，恢复执行时严格幂等，避免重跑已完成工具。",
-        "服务默认集成 LiteLLM、混合检索与进程内 MCP；首次访问 `service.app:app` 时触发 `create_knowdesk_app()` 懒加载初始化。",
+        "服务默认集成 LiteLLM、混合检索与进程内 MCP；首次访问 `knowdesk.service.app:app` 时触发 `create_knowdesk_app()` 懒加载初始化。",
         defaults_line,
         f"评测环境容器镜像将 tau2-bench 锁定于提交 `{checkout.group(1)}`。",
         "",
@@ -528,7 +533,7 @@ def build_readme(
         "|---|---|---|---|",
         "| τ 评测 | `eval/tau_runner.py` | τ orchestrator | 适配器进程内的安全状态，图用 `InMemorySaver` |",
         "| 无框架循环 | 调用方自己建 `PlainAgentLoop` | `ReliableToolExecutor` | 调用方决定要不要 SQLite 账本 |",
-        "| FastAPI 演示 | `service.app:app` | 进程内 MCP | `SqliteSaver` 加 `idempotency_ledger` |",
+        "| FastAPI 演示 | `knowdesk.service.app:app` | 进程内 MCP | `SqliteSaver` 加 `idempotency_ledger` |",
         "",
         "## 实测结果",
         "",
@@ -593,7 +598,7 @@ def build_readme(
         "uv run --no-sync pytest -v -W ignore",
         "",
         "# 启动在线演示服务",
-        "uv run --no-sync uvicorn service.app:app --host 0.0.0.0 --port 8000",
+        "uv run --no-sync uvicorn knowdesk.service.app:app --host 0.0.0.0 --port 8000",
         "```",
         "",
         "本地服务访问地址：[http://localhost:8000](http://localhost:8000)。在线调用需配置环境变量 `DASHSCOPE_API_KEY`（离线单元测试无需任何 API Key）。",

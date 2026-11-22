@@ -3,14 +3,14 @@ import pytest
 try:
     from tau2.data_model.message import ToolCall
     from tau2.environment.environment import Environment
-    from mcp_server.server import SessionEnvironmentManager, _get_banking_env, get_banking_tasks
+    from knowdesk.mcp.server import SessionEnvironmentManager, _get_banking_env, get_banking_tasks
 except ImportError:
     ToolCall = None
 
 if ToolCall is None:
     pytest.skip("tau2 not installed or tau2-bench not found", allow_module_level=True)
 
-from mcp_client.client import MCPToolBackend
+from knowdesk.mcp.client import MCPToolBackend
 
 
 def test_m36_dual_path_db_hash_consistency_and_negative_case(tmp_path, monkeypatch):

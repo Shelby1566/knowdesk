@@ -25,7 +25,7 @@ from eval.metrics import (
 from eval.pass_k import paired_bootstrap_diff
 from eval.tau_runner import DEFAULT_LLM_ARGS, DEFAULT_MODEL, run_tau
 from eval.x2_protocol import PROTOCOL_TRIALS, SEED, cell_by_key
-from kb.loader import load_documents
+from knowdesk.kb.loader import load_documents
 
 ROOT = Path(__file__).resolve().parents[1]
 REPORT_PATH = ROOT / "RESULTS_X2.md"

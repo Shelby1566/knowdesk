@@ -17,7 +17,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from agent.guard import GuardEngine, SecurityState
+from knowdesk.agent.guard import GuardEngine, SecurityState
 from eval.manifest import write_manifest
 from eval.safety_report import write_safety_report
 
@@ -253,8 +253,8 @@ def run_table_b() -> dict[str, Any]:
         queries.append((task_id, text))
 
     os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
-    from kb.hybrid_retriever import KnowDeskHybridRetriever
-    from kb.retrieval_config import CONFIG_PATH, load_retrieval_defaults
+    from knowdesk.kb.hybrid_retriever import KnowDeskHybridRetriever
+    from knowdesk.kb.retrieval_config import CONFIG_PATH, load_retrieval_defaults
 
     if not CONFIG_PATH.exists():
         raise FileNotFoundError("kb/retrieval_defaults.json is missing. Run X1 before table B.")

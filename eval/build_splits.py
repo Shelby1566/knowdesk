@@ -4,8 +4,8 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from kb.loader import DEFAULT_TASKS_PATH, load_documents
-from kb.router import map_doc_to_product_line
+from knowdesk.kb.loader import DEFAULT_TASKS_PATH, load_documents
+from knowdesk.kb.router import map_doc_to_product_line
 
 SPLITS_PATH = Path(__file__).resolve().parent / "splits.json"
 SEED = 42

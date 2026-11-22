@@ -1,6 +1,6 @@
 from collections import Counter
 from typing import Callable, Sequence
-from tools.schemas import FaithfulnessVerdict, validate_structured_output
+from knowdesk.tools.schemas import FaithfulnessVerdict, validate_structured_output
 
 def cohens_kappa(y_human: Sequence[str], y_judge: Sequence[str], labels: Sequence[str] = ("faithful", "unfaithful")) -> dict[str, float | dict]:
     """

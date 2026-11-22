@@ -8,7 +8,7 @@ except ImportError:
 if AssistantMessage is None:
     pytest.skip("tau2 not installed or tau2-bench not found", allow_module_level=True)
 
-from adapters.tau2_adapter import KnowDeskPlainTauAgent, KnowDeskGraphTauAgent, GUARD_TRACE_PATH
+from knowdesk.adapters.tau2_adapter import KnowDeskPlainTauAgent, KnowDeskGraphTauAgent, GUARD_TRACE_PATH
 
 def _make_assistant_tc(call_id: str, name: str, arguments: dict) -> AssistantMessage:
     tc = ToolCall(id=call_id, name=name, arguments=arguments, requestor="assistant")
@@ -36,7 +36,7 @@ def test_tau2_agents_internal_guard_self_correction():
             idx += 1
             return res
 
-        with patch("adapters.tau2_adapter.generate", side_effect=fake_generate):
+        with patch("knowdesk.adapters.tau2_adapter.generate", side_effect=fake_generate):
             agent = AgentCls(tools=[], domain_policy="Policy", llm="dashscope/qwen3.8-flash", llm_args={})
             state = agent.get_init_state()
             user_msg = UserMessage(role="user", content="Please freeze my card.")

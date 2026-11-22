@@ -115,8 +115,8 @@ def run_x7() -> dict[str, Any]:
     import os
 
     os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
-    from kb.hybrid_retriever import KnowDeskHybridRetriever
-    from kb.retrieval_config import CONFIG_PATH, load_retrieval_defaults
+    from knowdesk.kb.hybrid_retriever import KnowDeskHybridRetriever
+    from knowdesk.kb.retrieval_config import CONFIG_PATH, load_retrieval_defaults
 
     if not CONFIG_PATH.exists():
         raise FileNotFoundError(
