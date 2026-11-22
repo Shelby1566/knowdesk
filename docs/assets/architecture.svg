@@ -1,0 +1,209 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 620" width="1120" height="620" role="img" aria-label="KnowDesk System Architecture">
+  <defs>
+    <style>
+      .font-sans { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Google Sans", "Inter", "Segoe UI", "PingFang SC", "Helvetica Neue", sans-serif; }
+      .font-mono { font-family: "SF Mono", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+      .title { font-size: 20px; font-weight: 700; fill: #0F172A; letter-spacing: -0.3px; }
+      .subtitle { font-size: 12.5px; font-weight: 400; fill: #64748B; }
+      .card-title { font-size: 14.5px; font-weight: 600; fill: #0F172A; letter-spacing: -0.2px; }
+      .node-title { font-size: 13px; font-weight: 600; fill: #1E293B; }
+      .node-sub { font-size: 11px; font-weight: 400; fill: #64748B; }
+      .pill-text { font-size: 11px; font-weight: 500; }
+      .metric-text { font-size: 11px; font-weight: 600; }
+    </style>
+
+    <filter id="card-shadow" x="-4%" y="-4%" width="108%" height="112%">
+      <feDropShadow dx="0" dy="4" stdDeviation="10" flood-color="#0F172A" flood-opacity="0.05"/>
+    </filter>
+    <filter id="node-shadow" x="-4%" y="-6%" width="108%" height="118%">
+      <feDropShadow dx="0" dy="1.5" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.04"/>
+    </filter>
+
+    <linearGradient id="bg-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F8FAFC"/>
+      <stop offset="100%" stop-color="#F1F5F9"/>
+    </linearGradient>
+
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 1 1.5 L 8.5 5 L 1 8.5 z" fill="#3B82F6"/>
+    </marker>
+    <marker id="arrow-slate" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 1 1.5 L 8.5 5 L 1 8.5 z" fill="#94A3B8"/>
+    </marker>
+    <marker id="arrow-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 1 1.5 L 8.5 5 L 1 8.5 z" fill="#6366F1"/>
+    </marker>
+  </defs>
+
+  <!-- Canvas Background -->
+  <rect x="1" y="1" width="1118" height="618" rx="22" fill="url(#bg-grad)" stroke="#E2E8F0" stroke-width="1.5"/>
+
+  <!-- Top Header -->
+  <text x="36" y="42" class="font-sans title">KnowDesk System Architecture</text>
+  <text x="36" y="63" class="font-sans subtitle">Dual-Path Isolation · Breadcrumb Hybrid Retrieval · Fail-Closed Dynamic Guard · HITL Idempotency</text>
+
+  <!-- Header Badges -->
+  <g transform="translate(772, 26)">
+    <rect x="0" y="0" width="94" height="26" rx="13" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1"/>
+    <circle cx="15" cy="13" r="4" fill="#3B82F6"/>
+    <text x="25" y="17" class="font-sans pill-text" fill="#334155">Python 3.12</text>
+
+    <rect x="104" y="0" width="96" height="26" rx="13" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1"/>
+    <circle cx="119" cy="13" r="4" fill="#10B981"/>
+    <text x="129" y="17" class="font-sans pill-text" fill="#334155">LangGraph</text>
+
+    <rect x="210" y="0" width="102" height="26" rx="13" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1"/>
+    <circle cx="225" cy="13" r="4" fill="#6366F1"/>
+    <text x="235" y="17" class="font-sans pill-text" fill="#334155">MCP v2 RPC</text>
+  </g>
+
+  <!-- ==================== LEFT CARD: ONLINE SERVICE RUNTIME ==================== -->
+  <g filter="url(#card-shadow)">
+    <rect x="32" y="88" width="516" height="332" rx="18" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1"/>
+  </g>
+  <circle cx="56" cy="116" r="5" fill="#1A73E8"/>
+  <text x="69" y="121" class="font-sans card-title">Online Service Runtime</text>
+  <rect x="356" y="103" width="170" height="24" rx="12" fill="#EFF6FF"/>
+  <text x="441" y="119" text-anchor="middle" class="font-mono pill-text" fill="#1D4ED8">knowdesk.service.app</text>
+  <line x1="52" y1="138" x2="528" y2="138" stroke="#F1F5F9" stroke-width="1"/>
+
+  <!-- Node 1: FastAPI SSE -->
+  <g filter="url(#node-shadow)">
+    <rect x="54" y="154" width="212" height="58" rx="12" fill="#FFFFFF" stroke="#DBEAFE" stroke-width="1.2"/>
+    <text x="70" y="178" class="font-sans node-title">FastAPI SSE &amp; Web Console</text>
+    <text x="70" y="197" class="font-mono node-sub">Auth · Tenant ACL · Stream UI</text>
+  </g>
+
+  <!-- Node 2: LangGraph StateGraph -->
+  <g filter="url(#node-shadow)">
+    <rect x="312" y="154" width="214" height="58" rx="12" fill="#EFF6FF" stroke="#93C5FD" stroke-width="1.2"/>
+    <text x="328" y="178" class="font-sans node-title" fill="#1E3A8A">LangGraph StateGraph</text>
+    <text x="328" y="197" class="font-mono node-sub" fill="#1D4ED8">agent → guard → confirm → exec</text>
+  </g>
+
+  <!-- Node 3: Human Confirm (HITL) -->
+  <g filter="url(#node-shadow)">
+    <rect x="312" y="242" width="214" height="58" rx="12" fill="#FFFBEB" stroke="#FCD34D" stroke-width="1.2"/>
+    <text x="328" y="266" class="font-sans node-title" fill="#92400E">Human-in-the-Loop (HITL)</text>
+    <text x="328" y="285" class="font-mono node-sub" fill="#B45309">interrupt() · Approve / Modify</text>
+  </g>
+
+  <!-- Node 4: Tool Exec + WAL Ledger -->
+  <g filter="url(#node-shadow)">
+    <rect x="54" y="242" width="212" height="58" rx="12" fill="#ECFDF5" stroke="#6EE7B7" stroke-width="1.2"/>
+    <text x="70" y="266" class="font-sans node-title" fill="#065F46">Reliable Tool Executor</text>
+    <text x="70" y="285" class="font-mono node-sub" fill="#047857">Session Lock · SHA-256 Ledger</text>
+  </g>
+
+  <!-- Node 5: MCP Server/Client -->
+  <g filter="url(#node-shadow)">
+    <rect x="54" y="334" width="212" height="62" rx="12" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.2"/>
+    <text x="70" y="359" class="font-sans node-title">MCP JSON-RPC Backend</text>
+    <text x="70" y="379" class="font-mono node-sub">knowdesk/mcp · mode="legacy"</text>
+  </g>
+
+  <!-- Node 6: OpenTelemetry -->
+  <g filter="url(#node-shadow)">
+    <rect x="312" y="334" width="214" height="62" rx="12" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.2"/>
+    <text x="328" y="359" class="font-sans node-title">OpenTelemetry &amp; PII DLP</text>
+    <text x="328" y="379" class="font-mono node-sub">knowdesk/obs · OTLP / Jaeger</text>
+  </g>
+
+  <!-- Arrows inside Left Card -->
+  <path d="M 266 183 L 306 183" fill="none" stroke="#3B82F6" stroke-width="1.8" marker-end="url(#arrow-blue)"/>
+  <path d="M 419 212 L 419 236" fill="none" stroke="#3B82F6" stroke-width="1.8" marker-end="url(#arrow-blue)"/>
+  <path d="M 312 271 L 272 271" fill="none" stroke="#3B82F6" stroke-width="1.8" marker-end="url(#arrow-blue)"/>
+  <path d="M 160 300 L 160 328" fill="none" stroke="#3B82F6" stroke-width="1.8" marker-end="url(#arrow-blue)"/>
+  <path d="M 419 300 L 419 328" fill="none" stroke="#94A3B8" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#arrow-slate)"/>
+
+  <!-- ==================== RIGHT CARD: OFFLINE EVALUATION LOOP ==================== -->
+  <g filter="url(#card-shadow)">
+    <rect x="572" y="88" width="516" height="332" rx="18" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1"/>
+  </g>
+  <circle cx="596" cy="116" r="5" fill="#6366F1"/>
+  <text x="609" y="121" class="font-sans card-title">Offline Evaluation Loop</text>
+  <rect x="904" y="103" width="162" height="24" rx="12" fill="#EEF2FF"/>
+  <text x="985" y="119" text-anchor="middle" class="font-mono pill-text" fill="#4338CA">tau2-bench @ 033bf08</text>
+  <line x1="592" y1="138" x2="1068" y2="138" stroke="#F1F5F9" stroke-width="1"/>
+
+  <!-- Eval Node 1: Runner -->
+  <g filter="url(#node-shadow)">
+    <rect x="594" y="154" width="212" height="58" rx="12" fill="#FFFFFF" stroke="#E0E7FF" stroke-width="1.2"/>
+    <text x="610" y="178" class="font-sans node-title">Benchmark Runner</text>
+    <text x="610" y="197" class="font-mono node-sub">eval/tau_runner.py · dev30</text>
+  </g>
+
+  <!-- Eval Node 2: Adapter -->
+  <g filter="url(#node-shadow)">
+    <rect x="852" y="154" width="214" height="58" rx="12" fill="#EEF2FF" stroke="#A5B4FC" stroke-width="1.2"/>
+    <text x="868" y="178" class="font-sans node-title" fill="#312E81">Tau2 Benchmark Adapter</text>
+    <text x="868" y="197" class="font-mono node-sub" fill="#4338CA">knowdesk/adapters/tau2_adapter</text>
+  </g>
+
+  <!-- Eval Node 3: Plain -->
+  <g filter="url(#node-shadow)">
+    <rect x="594" y="242" width="212" height="58" rx="12" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.2"/>
+    <text x="610" y="266" class="font-sans node-title">knowdesk_plain</text>
+    <text x="610" y="285" class="font-mono node-sub">No-Framework Control Loop</text>
+  </g>
+
+  <!-- Eval Node 4: Graph -->
+  <g filter="url(#node-shadow)">
+    <rect x="852" y="242" width="214" height="58" rx="12" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.2"/>
+    <text x="868" y="266" class="font-sans node-title">knowdesk_graph</text>
+    <text x="868" y="285" class="font-mono node-sub">Single-Turn Isolated Graph</text>
+  </g>
+
+  <!-- Eval Node 5: Orchestrator -->
+  <g filter="url(#node-shadow)">
+    <rect x="594" y="334" width="472" height="62" rx="12" fill="#F1F5F9" stroke="#CBD5E1" stroke-width="1.2"/>
+    <text x="830" y="359" text-anchor="middle" class="font-sans node-title">τ-bench Orchestrator &amp; Deterministic DB State Hash Evaluator</text>
+    <text x="830" y="379" text-anchor="middle" class="font-mono node-sub">Trajectory Replay · Banking Domain (698 Docs) · Retail-ZH · Bootstrap 95% CI</text>
+  </g>
+
+  <!-- Arrows inside Right Card -->
+  <path d="M 806 183 L 846 183" fill="none" stroke="#6366F1" stroke-width="1.8" marker-end="url(#arrow-purple)"/>
+  <path d="M 959 212 L 959 236" fill="none" stroke="#6366F1" stroke-width="1.8" marker-end="url(#arrow-purple)"/>
+  <path d="M 959 212 C 959 227, 700 222, 700 236" fill="none" stroke="#6366F1" stroke-width="1.8" marker-end="url(#arrow-purple)"/>
+  <path d="M 700 300 L 700 328" fill="none" stroke="#6366F1" stroke-width="1.8" marker-end="url(#arrow-purple)"/>
+  <path d="M 959 300 L 959 328" fill="none" stroke="#6366F1" stroke-width="1.8" marker-end="url(#arrow-purple)"/>
+
+  <!-- Connectors from Both Cards to Shared Core -->
+  <path d="M 290 420 L 290 444" fill="none" stroke="#94A3B8" stroke-width="1.6" stroke-dasharray="4 3" marker-end="url(#arrow-slate)"/>
+  <path d="M 830 420 L 830 444" fill="none" stroke="#94A3B8" stroke-width="1.6" stroke-dasharray="4 3" marker-end="url(#arrow-slate)"/>
+
+  <!-- ==================== BOTTOM CARD: SHARED CORE ENGINES ==================== -->
+  <g filter="url(#card-shadow)">
+    <rect x="32" y="450" width="1056" height="142" rx="18" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1"/>
+  </g>
+  <circle cx="56" cy="476" r="5" fill="#10B981"/>
+  <text x="69" y="481" class="font-sans card-title">Shared Core Engines</text>
+  <text x="234" y="481" class="font-sans subtitle">Single source of truth shared across Online Service and Offline Evaluation</text>
+
+  <!-- Core 1: Breadcrumb Hybrid Retrieval -->
+  <g transform="translate(54, 498)">
+    <rect x="0" y="0" width="326" height="74" rx="13" fill="#EFF6FF" stroke="#BFDBFE" stroke-width="1.2"/>
+    <text x="16" y="24" class="font-sans node-title" fill="#1E3A8A">Breadcrumb Hybrid Retrieval</text>
+    <text x="16" y="42" class="font-mono node-sub" fill="#3B82F6">knowdesk/kb · BM25 + Qwen3 + RRF</text>
+    <rect x="16" y="50" width="224" height="18" rx="9" fill="#DBEAFE"/>
+    <text x="26" y="63" class="font-sans metric-text" fill="#1D4ED8">Recall@10 3.0x · Input Tokens -48.4%</text>
+  </g>
+
+  <!-- Core 2: Fail-Closed Guard Engine -->
+  <g transform="translate(397, 498)">
+    <rect x="0" y="0" width="326" height="74" rx="13" fill="#FEF2F2" stroke="#FECACA" stroke-width="1.2"/>
+    <text x="16" y="24" class="font-sans node-title" fill="#991B1B">Fail-Closed Dynamic Guard</text>
+    <text x="16" y="42" class="font-mono node-sub" fill="#DC2626">knowdesk/agent/guard · 4-Layer Norm</text>
+    <rect x="16" y="50" width="234" height="18" rx="9" fill="#FEE2E2"/>
+    <text x="26" y="63" class="font-sans metric-text" fill="#B91C1C">30/30 Adversarials Blocked · 0 FP</text>
+  </g>
+
+  <!-- Core 3: Persistence & Verification -->
+  <g transform="translate(740, 498)">
+    <rect x="0" y="0" width="326" height="74" rx="13" fill="#ECFDF5" stroke="#A7F3D0" stroke-width="1.2"/>
+    <text x="16" y="24" class="font-sans node-title" fill="#065F46">SQLite WAL Checkpointer &amp; Tests</text>
+    <text x="16" y="42" class="font-mono node-sub" fill="#059669">knowdesk/tools · Restart-Safe Replay</text>
+    <rect x="16" y="50" width="206" height="18" rx="9" fill="#D1FAE5"/>
+    <text x="26" y="63" class="font-sans metric-text" fill="#047857">74/74 Offline Pytest Verified</text>
+  </g>
+</svg>
