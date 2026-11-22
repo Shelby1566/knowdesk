@@ -4,7 +4,7 @@ from typing import Annotated, Any, Callable, TypedDict
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, interrupt
-from knowdesk.agent.guard import GuardEngine, SecurityState
+from knowdesk.agent.guard import GuardEngine, SecurityState, unwrap_tool_call
 from knowdesk.agent.workflow import project_messages_for_model, stage_directive
 from knowdesk.tools.schemas import StructuredToolError, is_tool_result_success
 from knowdesk.tools.tool_wrapper import ReliableToolExecutor, compute_idempotency_key
@@ -95,8 +95,11 @@ def build_knowdesk_graph(
             except json.JSONDecodeError:
                 parsed = t_args
 
+        real_name_preview, real_args_preview, _unwrap_err = unwrap_tool_call(t_name, parsed)
         idem_key = compute_idempotency_key(
-            session_id, t_name, parsed if isinstance(parsed, dict) else {"raw": str(parsed)}
+            session_id,
+            real_name_preview or t_name,
+            real_args_preview if isinstance(real_args_preview, dict) else {"raw": str(parsed)},
         )
         decision = guard.inspect(t_name, parsed, sec, idem_key=idem_key)
 
@@ -145,12 +148,17 @@ def build_knowdesk_graph(
         if decision_type == "modify":
             new_args = (res or {}).get("modified_args", {})
             t_name = tc.get("name", "")
+            real_target = tc.get("real_name") or t_name
             updated_raw = (
-                {"agent_tool_name": tc.get("real_name"), "arguments": new_args}
+                {"agent_tool_name": real_target, "arguments": new_args}
                 if t_name == "call_discoverable_agent_tool"
                 else new_args
             )
-            new_idem = compute_idempotency_key(state.get("session_id", "default"), t_name, updated_raw)
+            new_idem = compute_idempotency_key(
+                state.get("session_id", "default"),
+                real_target,
+                new_args if isinstance(new_args, dict) else {"raw": str(new_args)},
+            )
             if new_idem not in approved:
                 approved.append(new_idem)
             new_tc = {"id": tc.get("id", "call_1"), "name": t_name, "arguments": updated_raw}
@@ -207,7 +215,9 @@ def build_knowdesk_graph(
         if fn is None:
             out_str = json.dumps({"error_type": "not_found", "message": f"Tool '{real_name}' not found."})
         else:
-            out_str = executor.execute(session_id, real_name, exec_args, fn, is_write=is_write)
+            out_str = executor.execute(
+                session_id, real_name, exec_args, fn, is_write=is_write, idem_key=tc.get("idem_key")
+            )
 
         sec = SecurityState(
             verified=bool(state.get("verified", False)),

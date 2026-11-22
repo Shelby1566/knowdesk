@@ -44,10 +44,26 @@ class FaissVectorStore:
         self.index.add(normed)
         self.item_ids.extend(item_ids)
 
-    def search(self, query_vec: np.ndarray, k: int = 10) -> list[tuple[str, float]]:
+    def search(
+        self, query_vec: np.ndarray, k: int = 10, allowed_ids: set[str] | None = None
+    ) -> list[tuple[str, float]]:
         if len(self.item_ids) == 0:
             return []
         q_norm = l2_normalize(query_vec)
+        if allowed_ids is not None:
+            if not allowed_ids:
+                return []
+            valid_indices = [i for i, cid in enumerate(self.item_ids) if cid in allowed_ids]
+            if not valid_indices:
+                return []
+            top_k = min(k, len(valid_indices))
+            # Pre-filtering: compute exact inner product only over ACL-authorized vectors
+            # so high-clearance documents cannot crowd out low-clearance results from candidate_k.
+            sub_vecs = np.vstack([self.index.reconstruct(i) for i in valid_indices])
+            sims = (sub_vecs @ q_norm[0]).astype(np.float32)
+            order = np.argsort(-sims)[:top_k]
+            return [(self.item_ids[valid_indices[int(pos)]], float(sims[int(pos)])) for pos in order]
+
         top_k = min(k, len(self.item_ids))
         scores, indices = self.index.search(q_norm, top_k)
         results: list[tuple[str, float]] = []

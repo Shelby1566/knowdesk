@@ -202,3 +202,111 @@ def test_p0_6_demo_mode_end_to_end_hitl_without_api_key(monkeypatch, tmp_path):
     body = resumed.json()
     assert body["status"] == "resumed"
     assert "card_demo_8842" in body["reply"]
+
+
+def test_p1_acl_prefiltering_prevents_crowding_out():
+    """验证 BM25 与 FAISS 向量检索均支持 ACL 前置过滤，高权限文档不会挤占低权限用户的 Top-K 召回"""
+    import numpy as np
+    from knowdesk.kb.bm25 import BM25Index
+    from knowdesk.kb.vectorstore import FaissVectorStore
+
+    ids = [f"secret_{i}" for i in range(5)] + ["public_1"]
+    texts = ["platinum annual fee waiver policy secret"] * 5 + ["annual fee waiver policy"]
+    bm25 = BM25Index.build(ids, texts)
+    # Without pre-filtering, k=1 is dominated by secret_0
+    assert bm25.search("platinum annual fee waiver", k=1)[0][0].startswith("secret_")
+    # With pre-filtering, low-clearance user still gets public_1 at k=1
+    bm25_allowed = bm25.search("platinum annual fee waiver", k=1, allowed_ids={"public_1"})
+    assert len(bm25_allowed) == 1 and bm25_allowed[0][0] == "public_1"
+
+    store = FaissVectorStore(dim=4, index_type="flat")
+    vecs = np.array(
+        [[1.0, 0.0, 0.0, 0.0]] * 5 + [[0.6, 0.8, 0.0, 0.0]],
+        dtype=np.float32,
+    )
+    store.add(ids, vecs)
+    q = np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float32)
+    assert store.search(q, k=1)[0][0].startswith("secret_")
+    vec_allowed = store.search(q, k=1, allowed_ids={"public_1"})
+    assert len(vec_allowed) == 1 and vec_allowed[0][0] == "public_1"
+
+
+def test_p0_chained_two_write_approvals_and_canonical_idem_key(tmp_path):
+    """验证单轮连续两个高风险写操作时，审批恢复返回 awaiting_approval 而不断链，且幂等键统一"""
+    import json
+    from fastapi.testclient import TestClient
+    from knowdesk.service.app import create_knowdesk_app
+
+    executed = []
+    step = 0
+
+    def llm(msgs):
+        nonlocal step
+        step += 1
+        if step == 1:
+            return {"content": "", "tool_calls": [{"id": "c0", "name": "log_verification", "arguments": {"user_id": "u1"}}]}
+        if step == 2:
+            return {
+                "content": "",
+                "tool_calls": [
+                    {"id": "c1", "name": "freeze_card", "arguments": {"card_id": "card_1"}},
+                    {"id": "c2", "name": "freeze_card", "arguments": {"card_id": "card_2"}},
+                ],
+            }
+        return {"content": "Both cards frozen.", "tool_calls": []}
+
+    tools = {
+        "log_verification": lambda a: {"ok": True},
+        "freeze_card": lambda a: (executed.append(a["card_id"]), {"frozen": a["card_id"]})[1],
+    }
+    app = create_knowdesk_app(db_path=tmp_path / "chained_hitl.sqlite", llm_fn=llm, tool_funcs=tools)
+    client = TestClient(app)
+    headers = {"x-user-id": "sup_1", "x-tenant-id": "t1", "x-role": "supervisor"}
+    sess = client.post("/sessions", headers=headers).json()["session_id"]
+
+    sse = client.post(f"/sessions/{sess}/messages", headers=headers, json={"content": "freeze both cards"})
+    assert "awaiting_approval" in sse.text
+    first_key = None
+    for line in sse.text.splitlines():
+        if line.startswith("data:") and "awaiting_approval" in line:
+            first_key = json.loads(line[len("data:"):].strip())["pending_tool_call"]["idem_key"]
+    assert first_key
+
+    # Approve first write -> must pause again for second write
+    r1 = client.post(
+        f"/sessions/{sess}/approvals",
+        headers=headers,
+        json={"decision": "approve", "idempotency_key": first_key},
+    )
+    assert r1.status_code == 200
+    body1 = r1.json()
+    assert body1["status"] == "awaiting_approval"
+    second_key = body1["pending_tool_call"]["idem_key"]
+    assert second_key and second_key != first_key
+    assert executed == ["card_1"]
+
+    # Approve second write -> completes
+    r2 = client.post(
+        f"/sessions/{sess}/approvals",
+        headers=headers,
+        json={"decision": "approve", "idempotency_key": second_key},
+    )
+    assert r2.status_code == 200
+    assert r2.json()["status"] == "resumed"
+    assert "Both cards frozen" in r2.json()["reply"]
+    assert executed == ["card_1", "card_2"]
+
+
+def test_p1_mcp_persistent_client_reuses_session(tmp_path):
+    """验证 MCPToolBackend 复用持久 JSON-RPC 客户端会话而不是每次新建连接"""
+    backend = MCPToolBackend(db_path=tmp_path / "persist_mcp.sqlite")
+    backend.init_session("persist_s1")
+    try:
+        h1 = backend.get_db_hash("persist_s1")
+        first_client = backend._active_client
+        h2 = backend.get_db_hash("persist_s1")
+        second_client = backend._active_client
+        assert h1 == h2 and len(h1) > 0
+        assert first_client is not None and first_client is second_client
+    finally:
+        backend.close()

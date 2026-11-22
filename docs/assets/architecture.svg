@@ -204,6 +204,6 @@
     <text x="16" y="24" class="font-sans node-title" fill="#065F46">SQLite WAL Checkpointer &amp; Tests</text>
     <text x="16" y="42" class="font-mono node-sub" fill="#059669">knowdesk/tools · Restart-Safe Replay</text>
     <rect x="16" y="50" width="206" height="18" rx="9" fill="#D1FAE5"/>
-    <text x="26" y="63" class="font-sans metric-text" fill="#047857">75/75 Offline Pytest Verified</text>
+    <text x="26" y="63" class="font-sans metric-text" fill="#047857">78/78 Offline Pytest Verified</text>
   </g>
 </svg>

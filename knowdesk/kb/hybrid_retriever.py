@@ -64,6 +64,32 @@ class KnowDeskHybridRetriever:
             return linear_fusion(bm25_hits, dense_hits, alpha=used_alpha, k=fuse_k)
         raise RuntimeError(f"unknown fusion_mode: {mode}")
 
+    def _allowed_chunk_ids(self, acl: AccessControlContext | None) -> set[str] | None:
+        if acl is None:
+            return None
+        return {
+            cid
+            for cid, chunk in self.chunk_map.items()
+            if can_access(self.doc_acl.get(chunk.doc_id), acl)
+        }
+
+    def _search_candidates(
+        self, query: str, candidate_k: int, acl: AccessControlContext | None
+    ) -> tuple[list[tuple[str, float]], list[tuple[str, float]]]:
+        allowed = self._allowed_chunk_ids(acl)
+        if allowed is not None and not allowed:
+            return [], []
+        try:
+            bm25_hits = self.bm25.search(query, k=candidate_k, allowed_ids=allowed)
+        except TypeError:
+            bm25_hits = self.bm25.search(query, k=candidate_k)
+        q_vec = self.dense.encode_query(query)
+        try:
+            dense_hits = self.dense.store.search(q_vec, k=candidate_k, allowed_ids=allowed)
+        except TypeError:
+            dense_hits = self.dense.store.search(q_vec, k=candidate_k)
+        return bm25_hits, dense_hits
+
     def rank_documents(
         self,
         query: str,
@@ -80,8 +106,7 @@ class KnowDeskHybridRetriever:
         defaults = load_retrieval_defaults()
         if not str(query).strip():
             return []
-        bm25_hits = self.bm25.search(query, k=defaults.candidate_k)
-        dense_hits = self.dense.store.search(self.dense.encode_query(query), k=defaults.candidate_k)
+        bm25_hits, dense_hits = self._search_candidates(query, defaults.candidate_k, acl)
         fused = self._fuse_chunks(
             bm25_hits,
             dense_hits,
@@ -127,8 +152,7 @@ class KnowDeskHybridRetriever:
     ) -> list[tuple[Chunk, float]]:
         """返回命中的子块 (Child Chunks) 及其融合分数，支持零信任 ACL 过滤"""
         defaults = load_retrieval_defaults()
-        bm25_hits = self.bm25.search(query, k=defaults.candidate_k)
-        dense_hits = self.dense.store.search(self.dense.encode_query(query), k=defaults.candidate_k)
+        bm25_hits, dense_hits = self._search_candidates(query, defaults.candidate_k, acl)
         fused = self._fuse_chunks(
             bm25_hits,
             dense_hits,

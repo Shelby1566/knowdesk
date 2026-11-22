@@ -86,12 +86,21 @@ class BM25Index:
                 scores[i] += w_idf * (f * (self.k1 + 1.0)) / (f + self.k1 * norm)
         return scores
 
-    def search(self, query: str, k: int = 10) -> list[tuple[str, float]]:
+    def search(
+        self, query: str, k: int = 10, allowed_ids: set[str] | None = None
+    ) -> list[tuple[str, float]]:
         q_tokens = self.tokenize_fn(query)
         if not q_tokens:
             return []
+        if allowed_ids is not None and not allowed_ids:
+            return []
         scores = self.score_all(query)
-        ranked = sorted(zip(self.item_ids, scores), key=lambda x: x[1], reverse=True)
+        pairs = (
+            ((cid, sc) for cid, sc in zip(self.item_ids, scores) if cid in allowed_ids)
+            if allowed_ids is not None
+            else zip(self.item_ids, scores)
+        )
+        ranked = sorted(pairs, key=lambda x: x[1], reverse=True)
         return ranked[:k]
 
     def search_docs(

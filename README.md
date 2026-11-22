@@ -10,7 +10,7 @@
 ![LangGraph](https://img.shields.io/badge/LangGraph-StateGraph-1C3C3C?style=flat-square)
 ![MCP](https://img.shields.io/badge/MCP-JSON--RPC-000000?style=flat-square)
 ![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-PII%20Redacted-425CC7?style=flat-square&logo=opentelemetry&logoColor=white)
-![Tests](https://img.shields.io/badge/pytest-75%20collected-2EA44F?style=flat-square&logo=pytest&logoColor=white)
+![Tests](https://img.shields.io/badge/pytest-78%20collected-2EA44F?style=flat-square&logo=pytest&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)
 
 [核心指标](#核心指标) · [架构设计](#架构设计) · [项目结构](#项目结构) · [基准评测](#基准评测) · [快速开始](#快速开始)
@@ -198,4 +198,4 @@ uv run --no-sync python eval/render_readme.py
 
 ---
 
-<sub>KnowDesk `v0.1.0` · 测试套件：75 tests collected in 11.33s（collected `75`）· 自动同步于 `2026-11-22T10:38:19Z`</sub>
+<sub>KnowDesk `v0.1.0` · 测试套件：78 tests collected in 11.97s（collected `78`）· 自动同步于 `2026-11-22T10:54:18Z`</sub>

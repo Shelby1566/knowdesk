@@ -135,15 +135,16 @@ class ReliableToolExecutor:
         func: Callable[[dict[str, Any]], Any],
         is_write: bool = False,
         allow_idempotent_replay: bool = True,
+        idem_key: str | None = None,
     ) -> str:
         # 仅对同一 session 的写操作加细粒度会话锁，避免不同 session 或只读调用被全局锁串行阻塞。
         if is_write:
             with self._get_session_lock(session_id):
                 return self._execute_impl(
-                    session_id, tool_name, args, func, is_write, allow_idempotent_replay
+                    session_id, tool_name, args, func, is_write, allow_idempotent_replay, idem_key
                 )
         return self._execute_impl(
-            session_id, tool_name, args, func, is_write, allow_idempotent_replay
+            session_id, tool_name, args, func, is_write, allow_idempotent_replay, idem_key
         )
 
     def _execute_impl(
@@ -154,8 +155,9 @@ class ReliableToolExecutor:
         func: Callable[[dict[str, Any]], Any],
         is_write: bool,
         allow_idempotent_replay: bool,
+        idem_key: str | None = None,
     ) -> str:
-        idem_key = compute_idempotency_key(session_id, tool_name, args)
+        idem_key = idem_key or compute_idempotency_key(session_id, tool_name, args)
         if is_write and allow_idempotent_replay:
             if self.ledger is not None:
                 cached = self.ledger.get(session_id, idem_key)
