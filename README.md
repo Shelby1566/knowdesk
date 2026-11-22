@@ -32,19 +32,19 @@
 flowchart LR
   subgraph evalPath ["τ-bench 离线评测回路"]
     direction TB
-    runner[eval/tau_runner.py] --> adapter[knowdesk/adapters/tau2_adapter.py]
-    adapter --> agents[knowdesk_plain / knowdesk_graph]
-    agents --> guard1[GuardEngine]
-    agents --> hybrid[KnowDeskHybridRetriever]
-    agents --> tauTools[τ Orchestrator]
+    runner["eval/tau_runner.py"] --> adapter["knowdesk/adapters/tau2_adapter.py"]
+    adapter --> agents["knowdesk_plain / knowdesk_graph"]
+    agents --> guard1["GuardEngine"]
+    agents --> hybrid["KnowDeskHybridRetriever"]
+    agents --> tauTools["τ Orchestrator"]
   end
   subgraph servicePath ["FastAPI 在线服务回路"]
     direction TB
-    api[knowdesk/service/app.py] --> graph[knowdesk/agent/graph.py]
-    graph --> confirm[human_confirm interrupt]
-    confirm --> exec[tool_exec + WAL Ledger]
-    exec --> mcp[knowdesk/mcp JSON-RPC]
-    api --> otel[OpenTelemetry + PII Redact]
+    api["knowdesk/service/app.py"] --> stateGraph["knowdesk/agent/graph.py"]
+    stateGraph --> confirm["human_confirm (interrupt)"]
+    confirm --> toolExec["tool_exec + WAL Ledger"]
+    toolExec --> mcpClient["knowdesk/mcp (JSON-RPC)"]
+    api --> otel["OpenTelemetry + PII Redact"]
   end
 ```
 
@@ -201,4 +201,4 @@ uv run --no-sync python eval/render_readme.py
 
 ---
 
-<sub>KnowDesk `v0.1.0` · 测试套件：74 tests collected in 16.40s（collected `74`）· 自动同步于 `2026-11-22T09:31:04Z`</sub>
+<sub>KnowDesk `v0.1.0` · 测试套件：74 tests collected in 13.26s（collected `74`）· 自动同步于 `2026-11-22T10:16:28Z`</sub>
